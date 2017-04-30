@@ -11,7 +11,7 @@ from os import system, remove, path
 import sys
 sys.path.append(path.join('tools','utility'))
 from datetime import datetime as dt
-from nordicreader import Read_Nordic
+from PyNordicRW import Read_Nordic
 from matplotlib.colors import LightSource
 from matplotlib.cbook import get_sample_data
 from matplotlib.colors import LinearSegmentedColormap
@@ -19,6 +19,9 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib.patches import Ellipse
 import tarfile
 from collections import OrderedDict
+import operator
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 plt.rc('font',family='Times New Roman')
 plt.style.use('seaborn-paper')
@@ -27,31 +30,32 @@ plt.style.use('seaborn-paper')
 
 def init_plotting():
 
-    plt.rcParams['figure.figsize'] = (16, 9)
-    plt.rcParams['font.size'] = 13
-    plt.rcParams['font.family'] = 'Times New Roman'
-    plt.rcParams['axes.labelsize'] = plt.rcParams['font.size']
-    plt.rcParams['axes.titlesize'] = 1.5*plt.rcParams['font.size']
-    plt.rcParams['legend.fontsize'] = plt.rcParams['font.size']
-    plt.rcParams['xtick.labelsize'] = plt.rcParams['font.size']
-    plt.rcParams['ytick.labelsize'] = plt.rcParams['font.size']
-    plt.rcParams['savefig.dpi'] = 2*plt.rcParams['savefig.dpi']
-    plt.rcParams['xtick.major.size'] = 3
-    plt.rcParams['xtick.minor.size'] = 3
-    plt.rcParams['xtick.major.width'] = 1
-    plt.rcParams['xtick.minor.width'] = 1
-    plt.rcParams['ytick.major.size'] = 3
-    plt.rcParams['ytick.minor.size'] = 3
-    plt.rcParams['ytick.major.width'] = 1
-    plt.rcParams['ytick.minor.width'] = 1
-    plt.rcParams['legend.frameon'] = True
-    plt.rcParams['legend.shadow'] = True
-    plt.rcParams['legend.loc'] = 'lower left'
-    plt.rcParams['legend.numpoints'] = 1
+    plt.rcParams['figure.figsize']       = (26, 14)
+    plt.rcParams['figure.dpi']           = 75
+    plt.rcParams['font.size']            = 16
+    plt.rcParams['font.family']          = 'Times New Roman'
+    plt.rcParams['axes.labelsize']       = plt.rcParams['font.size']
+    plt.rcParams['axes.titlesize']       = 1.5*plt.rcParams['font.size']
+    plt.rcParams['legend.fontsize']      = plt.rcParams['font.size']
+    plt.rcParams['xtick.labelsize']      = plt.rcParams['font.size']
+    plt.rcParams['ytick.labelsize']      = plt.rcParams['font.size']
+    plt.rcParams['xtick.major.size']     = 3
+    plt.rcParams['xtick.minor.size']     = 3
+    plt.rcParams['xtick.major.width']    = 1
+    plt.rcParams['xtick.minor.width']    = 1
+    plt.rcParams['ytick.major.size']     = 3
+    plt.rcParams['ytick.minor.size']     = 3
+    plt.rcParams['ytick.major.width']    = 1
+    plt.rcParams['ytick.minor.width']    = 1
+    plt.rcParams['legend.frameon']       = True
+    plt.rcParams['legend.shadow']        = True
+    plt.rcParams['legend.loc']           = 'lower left'
+    plt.rcParams['legend.numpoints']     = 1
     plt.rcParams['legend.scatterpoints'] = 1
-    plt.rcParams['axes.linewidth'] = 1
-    plt.gca().spines['right'].set_color('none')
-    plt.gca().spines['top'].set_color('none')
+    plt.rcParams['axes.linewidth']       = 1
+    plt.rcParams['savefig.dpi']          = 200
+    plt.rcParams['xtick.minor.visible']  = 'False'
+    plt.rcParams['ytick.minor.visible']  = 'False'
     plt.gca().xaxis.set_ticks_position('bottom')
     plt.gca().yaxis.set_ticks_position('left')
 
@@ -61,40 +65,27 @@ init_plotting()
 #___________________ some usseful functions
 
 def k2d(kilometer, radius=6371):
-    """
-    Convenience function to convert kilometers to degrees assuming a perfectly
-    spherical Earth.
 
-    :type kilometer: float
-    :param kilometer: Distance in kilometers
-    :type radius: int, optional
-    :param radius: Radius of the Earth used for the calculation.
-    :rtype: float
-    :return: Distance in degrees as a floating point number.
-
-    .. rubric:: Example
-
-    >>> from obspy.geodetics import kilometer2degrees
-    >>> kilometer2degrees(300)
-    2.6979648177561915
-    """
     return kilometer / (2.0 * radius * pi / 360.0)
 
+def d2k(degrees, radius=6371):
+
+    return degrees * (2.0 * radius * pi / 360.0)
 
 def reject_outliers(data, m = 2.):
     
     d             = abs(data - median(data))
     mdev          = median(d)
     s             = d/mdev if mdev else 0.
-    good_data     = data[s<m]
+    inx           = where(s<m)
+    good_data     = data[inx]
     good_data_ind = where(s<m)
-    bad_data      = data[s>m]
+    inx           = where(s>m)
+    bad_data      = data[inx]
     bad_data_ind  = where(s>m)
     
     return good_data,good_data_ind[0],bad_data,bad_data_ind[0]
-
-
-      
+     
 #___________________ Main class
 
     
@@ -110,7 +101,9 @@ class main():
 
     def __init__(self):
 
-        pass
+        self.project_nm = raw_input("\n+++ Enter Project Name: <Please use the name of velocity model you're using>\n\n")
+
+        self.input_dic = self.read_par()
 
     #*-*-*-*-*- Cheeking if topography data exists
     #
@@ -118,20 +111,22 @@ class main():
 
     def extract_topo(self):
 
-        here = os.getcwd()
-        os.chdir(os.path.join('gdb','db','srtm'))
+        if self.topo_flag == 'True':
 
-        if not os.path.exists('IRN.tif'):
+            here = os.getcwd()
+            os.chdir(os.path.join('gdb','db','srtm'))
 
-            print "+++ You're running 'PyVelest' for the first time on your system!"
-            print "+++ You'll never see this message next time."
-            print "\n--> Extracting topography data , Please wait ...\n"
-            
-            tar = tarfile.open('IRN.tif.tar.gz', "r:gz")
-            tar.extractall()
-            tar.close()
+            if not os.path.exists('IRN.tif'):
 
-        os.chdir(here)
+                print "+++ You're running 'PyVelest' for the first time on your system!"
+                print "+++ You'll never see this message next time."
+                print "\n--> Extracting topography data , Please wait ...\n"
+                
+                tar = tarfile.open('IRN.tif.tar.gz', "r:gz")
+                tar.extractall()
+                tar.close()
+
+            os.chdir(here)
     
     #*-*-*-*-*- Remove old files and do empy all folders
     #
@@ -140,13 +135,13 @@ class main():
 
     def clean(self):
 
-        if os.path.exists('tmp'):
+        if os.path.exists(os.path.join('tmp',self.project_nm)):
 
-            rmtree('tmp')
+            rmtree(os.path.join('tmp',self.project_nm))
 
-        if os.path.exists('velout'):
+        if os.path.exists(os.path.join('velout',self.project_nm)):
 
-            rmtree('velout')
+            rmtree(os.path.join('velout',self.project_nm))
 
 
     def write_cmn(self, input_dic, output='velest.cmn', project_nm='test'):
@@ -269,9 +264,7 @@ class main():
     # Given the parameter file [./par/par.dat], read all VELEST
     # required parameters.
 
-    def read_par(self,par_file=os.path.join('par','par.dat')):
-
-        self.project_nm = raw_input('\n+++ Enter Project Name:\n\n')   
+    def read_par(self,par_file=os.path.join('par','par.dat')):   
 
         print "\n+++ Read VELEST input parameters ..."
 
@@ -298,20 +291,26 @@ class main():
         self.mag_min, self.mag_max = float(par_dic['MAG_MIN']), float(par_dic['MAG_MAX'])
         self.mag_flag              = par_dic['MAG_FLG']
         self.max_her               = float(par_dic['MAX_HER'])
+        self.bin_her               = float(par_dic['BIN_HER'])
         self.max_der               = float(par_dic['MAX_DER'])
+        self.bin_der               = float(par_dic['BIN_DER'])
         self.max_rms               = float(par_dic['MAX_RMS'])
         self.max_tdf               = float(par_dic['TIMEDIF'])
+        self.max_ldf               = float(par_dic['LOCDIF'])
         self.gmtcpt                = par_dic['GMT_CPT']
         self.pltcpt                = eval('plt.cm.'+par_dic['PLT_CPT'])
         self.cptflag               = par_dic['GMTPLTF']
-        self.iniloc_file           = par_dic['INILC_F']
-        self.finloc_file           = par_dic['FINLC_F']
         self.srtm_tif              = par_dic['SRTMTIF']
         self.res_x                 = par_dic['RES_P_X']
         self.res_y                 = par_dic['RES_P_Y']
         self.topo_flag             = par_dic['TOPOFLG']
         self.nstd                  = float(par_dic['NSTD'])
         self.sc_len                = int(float(par_dic['SC_LEN']))
+        self.bat_dep               = par_dic['BAT_DEP']
+        self.plt_flt               = par_dic['PLT_FLT']
+        self.ot_adj                = float(par_dic['OT_ADJ'])
+        self.hr_adj                = float(par_dic['HR_ADJ'])
+        self.dp_adj                = float(par_dic['DP_ADJ'])
 
         # Read velocity models in velinp directory and let user to choose wich one must be used
 
@@ -360,19 +359,49 @@ class main():
 
                     if all(chk_hdr):
 
-                        yer  = l[0:2].strip()
-                        mon  = l[2:4].strip()
-                        day  = l[4:6].strip()
-                        H    = l[7:9].strip()
-                        M    = l[9:10].strip()
-                        sec  = l[12:17].strip()
+                        yer  = int('%004d'%float(l[0:2]))
+                        mon  = int('%01d'%float(l[2:4]))
+                        day  = int('%1d'%float(l[4:6]))
+                        H    = int('%1d'%float(l[7:9]))
+                        M    = int('%1d'%float(l[9:11]))
+                        sec  = float(l[12:17])
+                        msec = int((sec - int(sec))*1e6)
+                        sec  = int(sec)
+
+                        if sec >= 60:
+
+                            sec = sec - 60
+                            M+=1
+
+                        if M >= 60:
+
+                            M = M - 60
+                            H+=1
+
+                        if H >= 24:
+
+                            H = H - 24
+                            day+=1
+
+                        if yer == 0:
+
+                            yer = 1900
+                                
+                        try:
+
+                            ot   = dt(yer,mon,day,H,M,sec,msec)
+
+                        except ValueError:
+
+                            print '+++ ==> Error encounterd on the following line:\n',l
+                            
                         lat  = float(l[18:26].strip()[:-1])
                         lon  = float(l[27:36].strip()[:-1])
                         dep  = float(l[37:43].strip())
                         mag  = float(l[45:50].strip())
                         gap  = float(l[54:57].strip())
                         rms  = float(l[62:67].strip())
-                        eqid = '_'.join([yer+mon+day,H+M,sec])
+                        eqid = ot
 
                         cnv_dic[eqid] = {'lat':lat,
                                          'lon':lon,
@@ -436,7 +465,7 @@ class main():
                     nm  = l[0:4]
                     lat = float(l[4:11])
                     lon = float(l[13:21])
-                    elv = float(l[23:26])
+                    elv = float(l[22:27])
                     rfn = int(l[30:33].strip())
 
                     sta_dic[nm] = {'lat':lat, 'lon':lon, 'elv':elv, 'rfn':rfn}
@@ -461,8 +490,9 @@ class main():
                 if "S-VELOCITY MODEL" in l:
 
                     start_s_flag = True
+                    start_p_flag = False
 
-                if start_p_flag and l.strip():
+                if start_p_flag and len(l.split()) >= 3:
 
                     p_vel.append(float(l.split()[0]))
                     p_dep.append(float(l.split()[1]))
@@ -470,7 +500,7 @@ class main():
 
                     vel_dic['P'] = {'p_vel':p_vel, 'p_dep':p_dep, 'p_dmp':p_vdamp}
 
-                if start_s_flag and l.strip():
+                if start_s_flag and len(l.split()) >= 3:
 
                     s_vel.append(float(l.split()[0]))
                     s_dep.append(float(l.split()[1]))
@@ -493,7 +523,7 @@ class main():
 
         inp       = loadtxt(inp_syntvel,dtype=str,comments='#',delimiter=':')
         
-        vel_dic,_ = self.read_VelSta()
+        vel_dic,_ = self.read_VelSta(inp_vel=os.path.join('velinp',self.velmod_name),inp_sta=self.input_dic['Stationfile'])
         pvel      = vel_dic['P']['p_vel']
         pdep      = vel_dic['P']['p_dep']
         pdmp      = vel_dic['P']['p_dmp']
@@ -525,19 +555,18 @@ class main():
         self.velmod_name    = inp[16][1].strip()
        
         
-        if not os.path.exists(os.path.join('tmp','synthvel')):
+        if not os.path.exists(os.path.join('tmp',self.project_nm,'synthvel')):
 
-            os.makedirs(os.path.join('tmp','synthvel'))
+            os.makedirs(os.path.join('tmp',self.project_nm,'synthvel'))
 
         else:
 
-            rmtree(os.path.join('tmp','synthvel'))
-            os.makedirs(os.path.join('tmp','synthvel'))
+            rmtree(os.path.join('tmp',self.project_nm,'synthvel'))
+            os.makedirs(os.path.join('tmp',self.project_nm,'synthvel'))
             
         
-        output      = os.path.join('tmp','synthvel')
-        orig_velmod = loadtxt(os.path.join('velinp',self.velmod_name)
-                                 ,skiprows=2,comments=['P-VELOCITY','S-VELOCITY'])
+        output      = os.path.join('tmp',self.project_nm,'synthvel')
+        orig_velmod = array([vel_dic['P']['p_vel'],vel_dic['P']['p_dep'],vel_dic['P']['p_dmp']]).T
 
         # generate random model with no gradient
         
@@ -545,20 +574,20 @@ class main():
             
             if self.vel_mode == "u":
 
-                vel = array([random.uniform(i-self.vel_dev,i+self.vel_dev,self.nmod) for i in pvel]).T
+                vel = array([random.uniform(i-self.vel_dev*(1.0/j),i+self.vel_dev*(1.0/j),self.nmod) for i,j in zip(pvel,pdmp)]).T
 
             elif self.vel_mode == "n":
 
-                vel = array([random.normal(i,self.vel_dev,self.nmod) for i in pvel]).T
+                vel = array([random.normal(i,self.vel_dev*(1.0/j),self.nmod) for i,j in zip(pvel,pdmp)]).T
 
 
             if self.dep_mode == "u":
 
-                dep = array([random.uniform(i-self.dep_dev,i+self.dep_dev,self.nmod) for i in pdep]).T
+                dep = array([random.uniform(i-self.dep_dev*(1.0/j),i+self.dep_dev*(1.0/j),self.nmod) for i,j in zip(pdep,pdmp)]).T
 
             elif self.dep_mode == "n":
 
-                dep = array([random.normal(i,self.dep_dev,self.nmod) for i in pdep]).T
+                dep = array([random.normal(i,self.dep_dev*(1.0/j),self.nmod) for i,j in zip(pdep,pdmp)]).T
 
 
         # generate random model with positive gradient
@@ -573,26 +602,26 @@ class main():
 
                 for _ in range(self.nmod):
 
-                    vel.append(sorted(random.uniform(i-self.vel_dev,i+self.vel_dev) for i in orig_velmod[:,0]))
+                    vel.append(sorted(random.uniform(i-self.vel_dev*(1.0/j),i+self.vel_dev*(1.0/j)) for i,j in zip(orig_velmod[:,0],pdmp)))
 
             elif self.vel_mode == "n":
 
                 for _ in range(self.nmod):
 
-                    vel.append(sorted(random.normal(i,self.vel_dev) for i in orig_velmod[:,0]))
+                    vel.append(sorted(random.normal(i,self.vel_dev*(1.0/j))  for i,j in zip(orig_velmod[:,0],pdmp)))
 
 
             if self.dep_mode == "u":
 
                 for _ in range(self.nmod):
 
-                    dep.append(sorted(random.uniform(i-self.dep_dev,i+self.dep_dev) for i in orig_velmod[:,1]))
+                    dep.append(sorted(random.uniform(i-self.dep_dev*(1.0/j),i+self.dep_dev*(1.0/j))  for i,j in zip(orig_velmod[:,1],pdmp)))
 
             elif self.dep_mode == "n":
 
                 for _ in range(self.nmod):
 
-                    dep.append(sorted(random.normal(i,self.dep_dev) for i in orig_velmod[:,1]))
+                    dep.append(sorted(random.normal(i,self.dep_dev*(1.0/j))  for i,j in zip(orig_velmod[:,1],pdmp)))
 
             vel = array(vel)
             dep = array(dep)            
@@ -645,7 +674,7 @@ class main():
 
         # Plot synthetic models
 
-        plt.figure(figsize=(10,6))
+        plt.figure()
 
         
         for i in range(self.nmod):
@@ -666,25 +695,26 @@ class main():
 
             if i == 0:
                 
-                plt.plot(x, y, 'r-', linewidth=2, label='Random Model')
+                plt.plot(x, y, 'r-', linewidth=2, label='Random')
                 
             else:
                 
                 plt.plot(x, y, 'r-', linewidth=2)
                 plt.ylim(ymin=-self.dep_max,ymax=-self.dep_min)
-                plt.title("Synthetic Models",fontsize=14)
+                plt.title("Synthetic Models")
                 plt.xlabel("Velocity [km/s]")
                 plt.ylabel("Depth [km]")
 
         velmod_org = [xx,yy]
         
-        plt.plot(xx, yy, 'k-', linewidth=3,label='Reference Model')
+        plt.plot(xx, yy, 'k-', linewidth=3,label='Reference')
         plt.grid()
         plt.legend()
         plt.xlim(self.vel_min, self.vel_max)
         plt.tight_layout()
         plt.savefig(os.path.join('figs',self.project_nm,"synt_models_"+self.project_nm))
         plt.show()
+        plt.close()
 
 
     #*-*-*-*-*- Run VELEST program
@@ -696,14 +726,14 @@ class main():
 
         print "+++ Run VELEST ..."
 
-        if not os.path.exists('velout'):
+        if not os.path.exists(os.path.join('velout',self.project_nm)):
 
-            os.mkdir('velout')
+            os.makedirs(os.path.join('velout',self.project_nm))
 
-        if os.path.exists(os.path.join('tmp','synthvel')):
+        if os.path.exists(os.path.join('tmp',self.project_nm,'synthvel')):
 
-            self.synthvel_files = glob.glob(os.path.join('tmp','synthvel','*.mod'))
-            self.synthvel_files = sorted(self.synthvel_files, key=lambda x: int(x.split('_')[1].split('.')[0]))
+            self.synthvel_files = glob.glob(os.path.join('tmp',self.project_nm,'synthvel','*.mod'))
+            self.synthvel_files = sorted(self.synthvel_files, key=lambda x: int(x.split(os.sep)[-1].split('_')[1].split('.')[0]))
 
             print '   --- %d synthetic model(s) found ...'%(len(self.synthvel_files))
 
@@ -714,13 +744,13 @@ class main():
 
         if self.synthvel_files:
 
-            copy('velest.cmn',os.path.join('tmp'))
+            copy('velest.cmn',os.path.join('tmp',self.project_nm))
     
             for m,c in zip(self.synthvel_files,range(len(self.synthvel_files))):
 
-                tmp_cmn = open(os.path.join('tmp','tmp.cmn'),'w')
+                tmp_cmn = open(os.path.join('tmp',self.project_nm,'tmp.cmn'),'w')
                 
-                with open(os.path.join('tmp','velest.cmn')) as f:
+                with open(os.path.join('tmp',self.project_nm,'velest.cmn')) as f:
 
                     for line in f:
 
@@ -731,16 +761,16 @@ class main():
                         elif os.path.join('velout','velest.out') in line:
 
                             tmp_cmn.write(line.replace(os.path.join('velout','velest.out'),
-                                                       os.path.join('velout','velest'+str(c+1)+'.out')))
+                                                       os.path.join('velout',self.project_nm,'velest'+str(c+1)+'.out')))
 
                         elif os.path.join('velout','final_loc.cnv') in line:
 
                             tmp_cmn.write(line.replace(os.path.join('velout','final_loc.cnv'),
-                                                       os.path.join('velout','final_loc'+str(c+1)+'.cnv')))
+                                                       os.path.join('velout',self.project_nm,'final_loc'+str(c+1)+'.cnv')))
 
                         elif os.path.join('velout','stations_corr.sta') in line:
                             tmp_cmn.write(line.replace(os.path.join('velout','stations_corr.sta'),
-                                                       os.path.join('velout','stations_corr'+str(c+1)+'.sta')))
+                                                       os.path.join('velout',self.project_nm,'stations_corr'+str(c+1)+'.sta')))
 
                         else:
 
@@ -748,13 +778,22 @@ class main():
 
                 tmp_cmn.close()
                 
-                move(os.path.join('tmp','tmp.cmn'),'velest.cmn')
+                move(os.path.join('tmp',self.project_nm,'tmp.cmn'),'velest.cmn')
 
                 print '   --- Run for synthetic model:',c+1
 
                 os.system('velest > /dev/null')
 
-            os.remove(os.path.join('tmp','velest.cmn'))
+            os.remove(os.path.join('tmp',self.project_nm,'velest.cmn'))
+
+            for _ in [os.path.join('velout','velest.out'),
+                      os.path.join('velout','final_loc.cnv'),
+                      os.path.join('velout','stations_corr.sta')]:
+
+                if os.path.exists(_):
+
+                    os.remove(_)
+
 
         else:
 
@@ -794,19 +833,26 @@ class main():
             self.rms_res     = [[] for sm in self.synthvel_files]
             self.avg_abs_adj = [[] for sm in self.synthvel_files]
             self.vel_adj     = [[] for sm in self.synthvel_files]
-            self.svel        = [[] for sm in self.synthvel_files]
-            self.sdep        = [[] for sm in self.synthvel_files]
-            self.stacor      = [[] for sm in self.synthvel_files]
+            self.svel        = {'P':[[] for sm in self.synthvel_files],
+                                'S':[[] for sm in self.synthvel_files]}
+            self.sdep        = {'P':[[] for sm in self.synthvel_files],
+                                'S':[[] for sm in self.synthvel_files]}
+            self.stacor      = {'P':[[] for sm in self.synthvel_files],
+                                'S':[[] for sm in self.synthvel_files]}
+
+            s_vel, s_dep     = [], [] # if nsp = 1, just one model will be  produced
 
             # read each VELEST output to extract inversion results
             
             for sm in range(self.nmod):
+                
 
-                with open(os.path.join('velout','velest%d.out'%(sm+1))) as f:
+                with open(os.path.join('velout',self.project_nm,'velest%d.out'%(sm+1))) as f:
 
-                    self.vel_adj_flag = False
-                    vel_flag     = False
-                    iter_counter = 0
+                    self.p_vel_adj_flag = False
+                    self.s_vel_adj_flag = False
+                    vel_flag            = False
+                    iter_counter        = 0
 
                     for l in f:
 
@@ -821,142 +867,160 @@ class main():
 
                         if  'Velocity model   1' in l and iter_counter-1 <= self.nit:
 
-                            self.vel_adj_flag = True
-                            tmp_vel      = []
+                            self.p_vel_adj_flag = True
+                            tmp_vel             = []
+                            p_vel, p_dep        = [], []
 
-                        if self.vel_adj_flag and 'Velocity model   1' not in l and len(l.split())==3:
+                        if  'Velocity model   2' in l and iter_counter-1 <= self.nit:
+
+                            self.s_vel_adj_flag = True
+                            s_vel, s_dep        = [], []
+                            
+                        if self.p_vel_adj_flag and 'Velocity model   1' not in l and len(l.split())==3:
 
                             tmp_vel.append((float(l.split()[2]),float(l.split()[1])))
+                            p_vel.append(float(l.split()[0]))
+                            p_dep.append(float(l.split()[2]))
 
-                        if not l.strip() and self.vel_adj_flag:
+                        if self.s_vel_adj_flag and 'Velocity model   2' not in l and len(l.split())==3:
+
+                            s_vel.append(float(l.split()[0]))
+                            s_dep.append(float(l.split()[2]))
+                                         
+                        if not l.strip() and self.p_vel_adj_flag:
                             
-                            self.vel_adj_flag = False
+                            self.p_vel_adj_flag = False
                             self.vel_adj[sm].append(tmp_vel)
 
-                        if 'nlay   top ..... bottom' in l:
+                        if not l.strip() and self.s_vel_adj_flag:
+                            
+                            self.s_vel_adj_flag = False
 
-                            vel_flag = True
+                self.svel['P'][sm].append(p_vel)
+                self.sdep['P'][sm].append(p_dep)
+                self.svel['S'][sm].append(s_vel)
+                self.sdep['S'][sm].append(s_dep)    
 
+            self.p_outlier_models = []
+            self.s_outlier_models = []
+            self.p_good_models    = []
+            self.s_good_models    = []
+            vp                    = array([_[0] for _ in self.svel['P']])
+            vs                    = array([_[0] for _ in self.svel['S']])
 
-                        if ' Total nr of events was' in l:
+            for _ in range(len(vp[0])):
 
-                            vel_flag = False         
+                good_model, good_model_ind, bad_model, bad_model_ind = reject_outliers(vp[:,_],m=self.ors)
+                self.p_outlier_models.extend(list(bad_model_ind))
 
-                        if 'nlay   top ..... bottom' not in l and vel_flag and l.strip():
+            for _ in range(len(vs[0])):
 
-                            self.sdep[sm].append(float(l[8:13])) 
-                            self.svel[sm].append(float(l[29:33]))       
+                good_model, good_model_ind, bad_model, bad_model_ind = reject_outliers(vs[:,_],m=self.ors)
+                self.s_outlier_models.extend(list(bad_model_ind))
 
-            outlier_models = []
-            v              = array(self.svel)
+            self.p_outlier_models = list(set(self.p_outlier_models))
+            self.p_good_models    = list(set(range(self.nmod)) - set(self.p_outlier_models))
+            self.svel_p           = [i[0] for i in self.svel['P']]
+            self.sdep_p           = [i[0] for i in self.sdep['P']]
+            self.nomc             = len(self.p_good_models)
 
-            for _ in range(len(v[0])):
+            self.s_outlier_models = list(set(self.s_outlier_models))
+            self.s_good_models    = list(set(range(self.nmod)) - set(self.s_outlier_models))
 
-                good_model, good_model_ind, bad_model, bad_model_ind = reject_outliers(v[:,_],m=self.ors)
-                outlier_models.extend(list(bad_model_ind))
-
-            outlier_models = list(set(outlier_models))
-
-            self.svel = [self.svel[_] for _ in range(self.nmod) if _ not in outlier_models]
-            self.sdep = [self.sdep[_] for _ in range(self.nmod) if _ not in outlier_models]
-            self.nomc = len(self.svel)
-            self.nmod = len(self.svel)
-                   
-
+            
             # plot results, Time/Location/Velocity adjusment 
 
-            output = os.path.join('figs','invres_'+self.project_nm)
-
-            iter_color      = ['k','r','g','b','c','y','m','purple','pink','brown'] # iteration color, maximum 10
+            output     = os.path.join('figs','invres_'+self.project_nm)
+            iter_color = ['k','r','g','b','c','y','m','purple','pink','brown'] # iteration color, maximum 10
                                
-
-            ax1    = plt.subplot(2,3,1)
-            self.minmod = [] 
-            for nm in range(self.nmod):
+            ax1         = plt.subplot(2,3,1)
+            self.minmod = {} 
+            for nm in self.p_good_models:
                 x      = range(1,1+self.nit)
-                ax1.plot([self.avg_abs_adj[nm][i][0] for i in range(len(self.avg_abs_adj[nm]))],marker='o',color='grey')
-                self.minmod.append(min([self.avg_abs_adj[nm][i][0] for i in range(len(self.avg_abs_adj[nm]))]))
-            self.ind    = self.minmod.index(min(self.minmod))
+                ax1.plot([self.avg_abs_adj[nm][_][0] for _ in range(len(self.avg_abs_adj[nm]))], marker='o',color='grey')
+                self.minmod[nm] = mean([self.avg_abs_adj[nm][_][0] for _ in range(len(self.avg_abs_adj[nm]))])
+            self.ind = sorted(self.minmod.items(), key=operator.itemgetter(1))[0][0]
             self.minmod = [self.avg_abs_adj[self.ind][i][0] for i in range(len(self.avg_abs_adj[self.ind]))]
             ax1.plot(self.minmod,marker='o',color='red',label='Minimum model,%d'%(self.ind))
             ax1.set_xlabel('Iteration Number [#]')
             ax1.set_ylabel('Origin time Adjustment [sec]')
-            ax1.set_ylim(0.0,0.5)
+            ax1.set_ylim(0.0,self.ot_adj)
             ax1.set_xlim(0,self.nit-1)
             plt.grid()
-            ax1.locator_params(axis='x',nbins=6)
-            ax1.locator_params(axis='y',nbins=6)
-            plt.legend(loc=1)
+            ax1.locator_params(axis='x',nbins=5)
+            ax1.locator_params(axis='y',nbins=5)
+            ax1.legend(loc=1)
 
             ax2 = plt.subplot(2,3,2)
-            self.minmod = []
-            for nm in range(self.nmod):
+            self.minmod = {}
+            for nm in self.p_good_models:
                 x      = range(1,1+self.nit)
-                ax2.plot([self.avg_abs_adj[nm][i][1] for i in range(len(self.avg_abs_adj[nm]))],marker='o',color='grey')
-                self.minmod.append(min([self.avg_abs_adj[nm][i][1] for i in range(len(self.avg_abs_adj[nm]))]))
-            self.ind    = self.minmod.index(min(self.minmod))
+                ax2.plot([self.avg_abs_adj[nm][_][1] for _ in range(len(self.avg_abs_adj[nm]))], marker='o',color='grey')
+                self.minmod[nm]=mean([self.avg_abs_adj[nm][_][1] for _ in range(len(self.avg_abs_adj[nm]))])
+            self.ind = sorted(self.minmod.items(), key=operator.itemgetter(1))[0][0]
             self.minmod = [self.avg_abs_adj[self.ind][i][1] for i in range(len(self.avg_abs_adj[self.ind]))]
             ax2.plot(self.minmod,marker='o',color='red',label='Minimum model,%d'%(self.ind))
             ax2.set_xlabel('Iteration Number [#]')
             ax2.set_ylabel('Longitude Adjustment [km]')
-            ax2.set_ylim(0.0,1.0)
+            ax2.set_ylim(0.0,self.hr_adj)
             ax2.set_xlim(0,self.nit-1)
             plt.grid()
-            ax2.locator_params(axis='x',nbins=6)
-            ax2.locator_params(axis='y',nbins=6)
-            plt.legend(loc=1)
+            ax2.locator_params(axis='x',nbins=5)
+            ax2.locator_params(axis='y',nbins=5)
+            ax2.legend(loc=1)
 
             ax3 = plt.subplot(2,3,3)
-            self.minmod = []
-            for nm in range(self.nmod):
+            self.minmod = {}
+            for nm in self.p_good_models:
                 x      = range(1,1+self.nit)
-                ax3.plot([self.avg_abs_adj[nm][i][2] for i in range(len(self.avg_abs_adj[nm]))],marker='o',color='grey')
-                self.minmod.append(min([self.avg_abs_adj[nm][i][2] for i in range(len(self.avg_abs_adj[nm]))]))
-            self.ind    = self.minmod.index(min(self.minmod))
+                ax3.plot([self.avg_abs_adj[nm][_][2] for _ in range(len(self.avg_abs_adj[nm]))], marker='o',color='grey')
+                self.minmod[nm]=mean([self.avg_abs_adj[nm][_][2] for _ in range(len(self.avg_abs_adj[nm]))])
+            self.ind = sorted(self.minmod.items(), key=operator.itemgetter(1))[0][0]
             self.minmod = [self.avg_abs_adj[self.ind][i][2] for i in range(len(self.avg_abs_adj[self.ind]))]
             ax3.plot(self.minmod,marker='o',color='red',label='Minimum model,%d'%(self.ind))
             ax3.set_xlabel('Iteration Number [#]')
             ax3.set_ylabel('Latitude Adjustment [km]')
-            ax3.set_ylim(0.0,1.0)
+            ax3.set_ylim(0.0,self.hr_adj)
             ax3.set_xlim(0,self.nit-1)
             plt.grid()
-            ax3.locator_params(axis='x',nbins=6)
-            ax3.locator_params(axis='y',nbins=6)
-            plt.legend(loc=1)
+            ax3.locator_params(axis='x',nbins=5)
+            ax3.locator_params(axis='y',nbins=5)
+            ax3.legend(loc=1)
 
             ax4 = plt.subplot(2,3,4)
-            self.minmod = []
-            for nm in range(self.nmod):
+            self.minmod = {}
+            for nm in self.p_good_models:
                 x      = range(1,1+self.nit)
-                ax4.plot([self.avg_abs_adj[nm][i][3] for i in range(len(self.avg_abs_adj[nm]))],marker='o',color='grey')
-                self.minmod.append(min([self.avg_abs_adj[nm][i][3] for i in range(len(self.avg_abs_adj[nm]))]))
-            self.ind    = self.minmod.index(min(self.minmod))
+                ax4.plot([self.avg_abs_adj[nm][_][3] for _ in range(len(self.avg_abs_adj[nm]))], marker='o',color='grey')
+                self.minmod[nm]=mean([self.avg_abs_adj[nm][_][3] for _ in range(len(self.avg_abs_adj[nm]))])
+            self.ind = sorted(self.minmod.items(), key=operator.itemgetter(1))[0][0]
             self.minmod = [self.avg_abs_adj[self.ind][i][3] for i in range(len(self.avg_abs_adj[self.ind]))]
             ax4.plot(self.minmod,marker='o',color='red',label='Minimum model,%d'%(self.ind))
             ax4.set_xlabel('Iteration Number [#]')
             ax4.set_ylabel('Depth Adjustment [km]')
-            ax4.set_ylim(0.0,1.0)
+            ax4.set_ylim(0.0,self.dp_adj)
             ax4.set_xlim(0,self.nit-1)
             plt.grid()
-            ax4.locator_params(axis='x',nbins=6)
-            ax4.locator_params(axis='y',nbins=6)
-            plt.legend(loc=1)
+            ax4.locator_params(axis='x',nbins=5)
+            ax4.locator_params(axis='y',nbins=5)
+            ax4.legend(loc=1)
 
             ax5 = plt.subplot(2,3,5)
-            self.minmod = []
-            for nm in range(self.nmod):
+            self.minmod = {}
+            self.test = {}
+            for nm in self.p_good_models:
                 x      = range(1,1+self.nit)
                 ax5.plot(self.rms_res[nm],marker='o',color='grey')
-                self.minmod.append(min(self.rms_res[nm]))
-            self.ind    = self.minmod.index(min(self.minmod))
+                self.minmod[nm]=mean(self.rms_res[nm])
+            self.ind = sorted(self.minmod.items(), key=operator.itemgetter(1))[0][0]
             self.minmod = self.rms_res[self.ind]
             ax5.plot(self.minmod,marker='o',color='red',label='Minimum model,%d'%(self.ind))
             ax5.set_xlabel('Iteration Number [#]')
             ax5.set_ylabel('RMS-Residual [sec]')
             plt.grid()
-            ax5.locator_params(axis='x',nbins=6)
-            ax5.locator_params(axis='y',nbins=6)
-            plt.legend(loc=1)
+            ax5.locator_params(axis='x',nbins=5)
+            ax5.locator_params(axis='y',nbins=5)
+            ax5.legend(loc=1)
 
 
             ax6 = plt.subplot(2,3,6)
@@ -980,8 +1044,8 @@ class main():
             ax6.set_xlabel('Velocity Adjusment [km/s]')
             ax6.set_ylabel('Depth [km]')
             ax6.set_xlim(-max(ymax),max(ymax))
-            ax6.locator_params(axis='x',nbins=6)
-            ax6.locator_params(axis='y',nbins=6)
+            ax6.locator_params(axis='x',nbins=5)
+            ax6.locator_params(axis='y',nbins=5)
             ax6.set_ylim(ax6.get_ylim()[::-1])
             plt.grid()
             handles, labels = plt.gca().get_legend_handles_labels()
@@ -993,13 +1057,13 @@ class main():
 
             plt.tight_layout()
             plt.savefig(os.path.join('figs',self.project_nm,'velest_analytics_'+self.project_nm))
-            plt.show()
+            plt.close()
 
 
-            # plot results, final velocity, station correction beside final location using new model
+            # plot results, final velocity, station correction beside final location using minimum model
             
-            cnv_dic         = self.read_cnv(inpcnv=os.path.join('velout','final_loc%d.cnv'%(self.ind+1)))
-            vel_dic,sta_dic = self.read_VelSta()
+            cnv_dic         = self.read_cnv(inpcnv=os.path.join('velout',self.project_nm,'final_loc%d.cnv'%(self.ind+1)))
+            vel_dic,sta_dic = self.read_VelSta(inp_vel=os.path.join('velinp',self.velmod_name),inp_sta=self.input_dic['Stationfile'])
 
             print "+++ Plot data statistics ..."
 
@@ -1032,23 +1096,23 @@ class main():
             odep.pop(0)
             odep.append(self.dep_max)
 
-            tmpvel = [[] for nm in range(self.nmod)]
-            tmpdep = [[] for nm in range(self.nmod)]
+            tmpvel_p = [[] for nm in range(self.nmod)]
+            tmpdep_p = [[] for nm in range(self.nmod)]
 
             for nm in range(self.nmod):
                 
-                for _,__ in zip(self.svel[nm],self.sdep[nm]):
+                for _,__ in zip(self.svel_p[nm],self.sdep_p[nm]):
                     
-                    tmpvel[nm].append(_)
-                    tmpvel[nm].append(_)
-                    tmpdep[nm].append(__)
-                    tmpdep[nm].append(__)
+                    tmpvel_p[nm].append(_)
+                    tmpvel_p[nm].append(_)
+                    tmpdep_p[nm].append(__)
+                    tmpdep_p[nm].append(__)
                 
-                tmpdep[nm].pop(0)
-                tmpdep[nm].append(self.dep_max)
+                tmpdep_p[nm].pop(0)
+                tmpdep_p[nm].append(self.dep_max)
 
-                self.svel[nm] = tmpvel[nm]
-                self.sdep[nm] = tmpdep[nm]
+                self.svel_p[nm] = tmpvel_p[nm]
+                self.sdep_p[nm] = tmpdep_p[nm]
 
             
             # plot-No 1, velocity model
@@ -1059,12 +1123,12 @@ class main():
 
             ax1 = fig.add_subplot(gs[0:2,0:2])
             
-            for nm in range(1,self.nmod):
-                ax1.plot(self.svel[nm],self.sdep[nm],color='red',linewidth=2)
-            ax1.plot(self.svel[0],self.sdep[0],color='red',linewidth=2,label='Inverted')
+            for nm in self.p_good_models:
+                ax1.plot(self.svel_p[nm],self.sdep_p[nm],color='red',linewidth=2)
+            ax1.plot(self.svel_p[0],self.sdep_p[0],color='red',linewidth=2,label='Inverted')
             ax1.plot(ovel,odep,color='black',linewidth=2.5,label='Refrence')
-            ax1.plot(self.svel[self.ind],self.sdep[self.ind],color='green',linewidth=2,label='Minimum')
-            ax1.plot(mean(self.svel,axis=0),mean(self.sdep,axis=0),color='blue',linewidth=1.5,label='Mean')
+            ax1.plot(self.svel_p[self.ind],self.sdep_p[self.ind],color='green',linewidth=2,label='Minimum')
+            ax1.plot(mean(self.svel_p,axis=0),mean(self.sdep_p,axis=0),color='blue',linewidth=1.5,label='Mean')
             xlim = ax1.get_xlim()
             ylim = ax1.get_ylim()
             xlim = (self.vel_min,self.vel_max)
@@ -1077,7 +1141,7 @@ class main():
             plt.grid()
             ax1.legend(numpoints=1)
             ax1.locator_params(axis='x',nbins=8)
-            ax1.locator_params(axis='y',nbins=6)
+            ax1.locator_params(axis='y',nbins=5)
 
             # plot results, station correction
 
@@ -1086,7 +1150,7 @@ class main():
             stlon = []
             stcor = []
 
-            with open(os.path.join('velout','stations_corr%d.sta'%(self.ind+1))) as f:
+            with open(os.path.join('velout',self.project_nm,'stations_corr%d.sta'%(self.ind+1))) as f:
 
                 for l in f:
 
@@ -1101,6 +1165,8 @@ class main():
             stlat = array(stlat)
             stlon = array(stlon)
             stcor = array(stcor)
+
+            # Plot station corrections
             
             ax2 = fig.add_subplot(gs[0:2,2:])
 
@@ -1111,8 +1177,8 @@ class main():
             self.tehran = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
             self.x,self.y    = self.tehran[:,0], self.tehran[:,1]
             self.m.plot(self.x,self.y, marker=None,color='r',linewidth=2.0,zorder=1)
-            ax2.text(51.3890, 35.6892, '$Tehran$')
-            ax2.plot(51.3700, 35.6892,marker='s', markersize=5, color='k')
+            ax2.text(51.3890, 35.6892, '$Tehran$', clip_on=True)
+            ax2.plot(51.3700, 35.6892,marker='s', markersize=5, color='k', clip_on=True)
 
 
             #____ Faults, Borders
@@ -1152,17 +1218,16 @@ class main():
             ax2.text(self.txt_x,self.txt_y,str(self.scale_len)+' km',
                     horizontalalignment='center')
 
-            ax2.text(self.sc_lon_st,self.txt_y,'N',horizontalalignment='center')
-            self.txt_y     = self.sc_lat_ed + 3*abs(diff([self.sc_lat_ed,min(ax2.get_ylim())]))
-            ax2.plot(self.sc_lon_st,self.txt_y,'k^',ms=10)
+            ax2.annotate('N', xy=(.030, .07), xycoords='axes fraction', fontsize=16,  ha='center', va='bottom')
+            ax2.annotate('^', xy=(.031, .09), xycoords='axes fraction', fontsize=22,  ha='center', va='bottom')
 
-            scl   = 500
+            scl = 500
             c   = evrms
-            im  = ax2.scatter(evlon,evlat,color=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool)
-            ax2.scatter(stlon[0],stlat[0],s=0.5*scl,marker='+',color='none',linewidth=1,label='+0.5sec')
-            ax2.scatter(stlon[stcor>=0],stlat[stcor>=0],s=abs(stcor[stcor>=0]*scl),marker='+',color='red',linewidth=1)
-            ax2.scatter(stlon[0],stlat[0],s=0.5*scl,marker='o',color='none',linewidth=1,label='-0.5sec')
-            ax2.scatter(stlon[stcor<0] ,stlat[stcor<0], s=abs(stcor[stcor<0]*scl),marker='o',facecolors='none' ,linewidth=1,edgecolor='blue')
+            im  = ax2.scatter(evlon,evlat,c=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool,vmin=0.0, vmax=self.max_rms)
+            ax2.scatter(stlon[0],stlat[0],s=0.5*scl,marker='+',color='none',linewidth=1,label='+%.1f'%(self.max_rms))
+            ax2.scatter(stlon[stcor>=0],stlat[stcor>=0],s=abs(stcor[stcor>=0]*scl),marker='+',color='blue',linewidth=1)
+            ax2.scatter(stlon[0],stlat[0],s=0.5*scl,marker='o',color='none',linewidth=1,label='-%.1f'%(self.max_rms))
+            ax2.scatter(stlon[stcor<0] ,stlat[stcor<0], s=abs(stcor[stcor<0]*scl),marker='o',facecolors='none' ,linewidth=1,edgecolor='red')
 
             for x,y,t in zip (stlon,stlat,stnm):
 
@@ -1173,52 +1238,103 @@ class main():
             plt.grid()
             ax2.set_xlim(self.lon_min,self.lon_max)
             ax2.set_ylim(self.lat_min,self.lat_max)
-            ax2.locator_params(axis='x',nbins=6)
-            ax2.locator_params(axis='y',nbins=6)
+            ax2.locator_params(axis='x',nbins=5)
+            ax2.locator_params(axis='y',nbins=5)
             leg = ax2.legend(loc=4)
             legend = ax2.get_legend()
             legend.legendHandles[0].set_color('red')
             legend.legendHandles[1].set_edgecolor('blue')
-            cb           = plt.colorbar(im,ax=ax2, label='RMS [second]')
+            divider      = make_axes_locatable(ax2)
+            cax          = divider.append_axes("right", size="2%", pad=0.05)
+            cb           = plt.colorbar(im, ax=ax2, cax=cax, label='RMS [second]')
             tick_locator = ticker.MaxNLocator(nbins=6)
             cb.locator   = tick_locator
             cb.update_ticks()
 
             # plot compare figure between original and minimum model
 
-            orig_cnv = self.read_cnv(inpcnv=os.path.join('velinp','data.cnv'))
-            mmod_cnv = self.read_cnv(inpcnv=os.path.join('velout','final_loc%d.cnv'%(self.ind+1)))
+            self.orig_cnv = self.read_cnv(inpcnv=os.path.join('velinp','data.cnv'))
+            self.mmod_cnv = self.read_cnv(inpcnv=os.path.join('velout',self.project_nm,'final_loc%d.cnv'%(self.ind+1)))
 
-            olat = array([orig_cnv[k]['lat'] for k in sorted(orig_cnv.keys())])
-            olon = array([orig_cnv[k]['lon'] for k in sorted(orig_cnv.keys())])
-            odep = array([orig_cnv[k]['dep'] for k in sorted(orig_cnv.keys())])
-            orms = array([orig_cnv[k]['rms'] for k in sorted(orig_cnv.keys())])
+            olon = []
+            olat = []
+            odep = []
+            orms = []
 
-            mlat = [mmod_cnv[k]['lat'] for k in sorted(mmod_cnv.keys())]
-            mlon = [mmod_cnv[k]['lon'] for k in sorted(mmod_cnv.keys())]
-            mdep = [mmod_cnv[k]['dep'] for k in sorted(mmod_cnv.keys())]
-            mrms = [mmod_cnv[k]['rms'] for k in sorted(mmod_cnv.keys())]
+            mlon = []
+            mlat = []
+            mdep = []
+            mrms = []
 
+            lat_diff = []
+            lon_diff = []
+            
+            for i in sorted(self.orig_cnv.keys()):
+
+                i_lon = self.orig_cnv[i]['lon']
+                i_lat = self.orig_cnv[i]['lat']
+                i_dep = self.orig_cnv[i]['dep']
+                i_rms = self.orig_cnv[i]['rms']
+
+                for f in sorted(self.mmod_cnv.keys()):
+
+                    f_lon  = self.mmod_cnv[f]['lon']
+                    f_lat  = self.mmod_cnv[f]['lat']
+                    f_dep  = self.mmod_cnv[f]['dep']
+                    f_rms  = self.mmod_cnv[f]['rms']
+                    
+                    dx     = f_lon - i_lon
+                    dy     = f_lat - i_lat
+                    diff_h = sqrt(dx**2 + dy**2)
+                    
+                    diff_ot = i-f
+                    diff_ot = abs(diff_ot.total_seconds())
+                    
+                    if diff_ot <= self.max_tdf and diff_h <= self.max_ldf:
+                        
+                        olon.append(i_lon)
+                        olat.append(i_lat)
+                        odep.append(i_dep)
+                        orms.append(i_rms)
+
+                        mlon.append(f_lon)
+                        mlat.append(f_lat)
+                        mdep.append(f_dep)
+                        mrms.append(f_rms)
+
+                        break
+
+            olon = array(olon)
+            olat = array(olat)
+            odep = array(odep)
+            orms = array(orms)
+
+            mlon = array(mlon)
+            mlat = array(mlat)
+            mdep = array(mdep)
+            mrms = array(mrms)
+            
             ax3 = fig.add_subplot(gs[2:,0])
             
             for (x,xx) in zip(olon,mlon):
                 
                 if xx-x>0:
 
-                    ax3.plot([x,x],[xx-x,0],'r-o',markevery=olon.size)
+                    ax3.plot([x,x],[d2k(xx-x),0],'r-o',markevery=olon.size)
 
                 else:
 
-                    ax3.plot([x,x],[xx-x,0],'b-o',markevery=olon.size)
+                    ax3.plot([x,x],[d2k(xx-x),0],'b-o',markevery=olon.size)
                     
             ax3.set_xlabel('Longitude [deg]')
             ax3.set_ylabel('Dislocation [km]')
             ax3.set_ylim(-max([abs(_) for _ in ax3.get_ylim()]),max([abs(_) for _ in ax3.get_ylim()]))
+            ax3.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
             xlim=ax3.get_xlim()
             ax3.plot(xlim,[0,0], linewidth=2, color = 'k')
             ax3.set_xlim(xlim)
-            ax3.locator_params(axis='x',nbins=6)
-            ax3.locator_params(axis='y',nbins=6)
+            ax3.locator_params(axis='x',nbins=5)
+            ax3.locator_params(axis='y',nbins=5)
             plt.grid()
 
             ax4 = fig.add_subplot(gs[2:,1])
@@ -1227,20 +1343,21 @@ class main():
 
                 if yy-y>0:
 
-                    ax4.plot([y,y],[yy-y,0],'r-o',markevery=olat.size)
+                    ax4.plot([y,y],[d2k(yy-y),0],'r-o',markevery=olat.size)
 
                 else:
 
-                    ax4.plot([y,y],[yy-y,0],'b-o',markevery=olat.size)
+                    ax4.plot([y,y],[d2k(yy-y),0],'b-o',markevery=olat.size)
 
             ax4.set_xlabel('Latitude [deg]')
             ax4.set_ylabel('Dislocation [km]')
             ax4.set_ylim(-max([abs(_) for _ in ax4.get_ylim()]),max([abs(_) for _ in ax4.get_ylim()]))
+            ax4.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
             xlim=ax4.get_xlim()
             ax4.plot(xlim,[0,0], linewidth=2, color = 'k')
             ax4.set_xlim(xlim)
-            ax4.locator_params(axis='x',nbins=6)
-            ax4.locator_params(axis='y',nbins=6)
+            ax4.locator_params(axis='x',nbins=5)
+            ax4.locator_params(axis='y',nbins=5)
             plt.grid()
             
             ax5 = fig.add_subplot(gs[2:,2])
@@ -1256,23 +1373,24 @@ class main():
 
             ax5.set_xlabel('Depth [km]')
             ax5.set_ylabel('Dislocation [km]')
-            ax5.set_ylim(-20,20)
-            xlim=(0,30)
+            ax5.set_ylim(-max([abs(_) for _ in ax5.get_ylim()]),max([abs(_) for _ in ax5.get_ylim()]))
+            ax5.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+            xlim=(0,self.dep_max)
             ax5.plot(xlim,[0,0], linewidth=2, color = 'k')
             ax5.set_xlim(xlim)
-            ax5.locator_params(axis='x',nbins=6)
-            ax5.locator_params(axis='y',nbins=6)
+            ax5.locator_params(axis='x',nbins=5)
+            ax5.locator_params(axis='y',nbins=5)
             plt.grid()
             
             ax6 = fig.add_subplot(gs[2:,3])
-            bns = arange(0, 0.5 + 0.05, 0.05)
+            bns = arange(0, self.max_rms + self.max_rms/20.0, self.max_rms/20.0)
             ax6.hist(orms,color='r',label='Initial',alpha=.65,bins=bns)
             ax6.hist(mrms,color='b',label='Relocated',alpha=.65,bins=bns)
             ax6.set_xlabel('RMS [sec]')
             ax6.set_ylabel('Event [#]')
             ax6.set_xlim(0,self.max_rms)
-            ax6.locator_params(axis='x',nbins=6)
-            ax6.locator_params(axis='y',nbins=6)
+            ax6.locator_params(axis='x',nbins=5)
+            ax6.locator_params(axis='y',nbins=5)
             plt.grid()
             ax6.legend(loc=1)
 
@@ -1280,7 +1398,7 @@ class main():
             print '+++ Minimum model id:',self.ind+1
             plt.tight_layout()
             plt.savefig(os.path.join('figs',self.project_nm,'velest_final_'+self.project_nm))
-            plt.show()
+            plt.close()
 
 
                         
@@ -1288,259 +1406,7 @@ class main():
 
         else:
 
-            self.rms_res     = []
-            self.avg_abs_adj = []
-            self.vel_adj     = []
-            self.svel        = [] # synth res
-            self.sdep        = [] # synth res
-            
-            with open(os.path.join('velout','velest.out')) as f:
-
-                self.vel_adj_flag = False
-                vel_flag     = False
-
-                for l in f:
-
-                    if 'DATVAR=' in l:
-
-                        self.rms_res.append(float(l[68:].strip()))
-
-                    if 'A V E R A G E   of ABSOLUTE ADJUSTMENTS' in l:
-
-                        self.avg_abs_adj.append([float(i) for i in l[42:].strip().split()])
-
-                    if  'Velocity model   1' in l:
-
-                        self.vel_adj_flag = True
-                        tmp_vel      = []
-
-                    if self.vel_adj_flag and 'Velocity model   1' not in l and l.strip():
-
-                        tmp_vel.append((float(l.split()[2]),float(l.split()[1])))
-
-                    if not l.strip() and self.vel_adj_flag:
-                        self.vel_adj_flag = False
-                        self.vel_adj.append(tmp_vel)
-
-
-                    if 'nlay   top ..... bottom' in l:
-
-                        vel_flag = True
-
-
-                    if ' Total nr of events was' in l:
-
-                        vel_flag = False         
-
-                    if 'nlay   top ..... bottom' not in l and vel_flag and l.strip():
-
-                        self.sdep.append(float(l[8:13])) 
-                        self.svel.append(float(l[29:33]))
-
-
-            # plot results, Time/Location/Velocity adjusment 
-
-            output = os.path.join('figs','invres_'+self.project_nm)
-            
-            x      = range(1,1+len(self.avg_abs_adj))
-
-            iter_color      = ['b','g','r','c','m','y','k','purple','pink','brown'] # iteration color, maximum 10 
-
-            ax1 = plt.subplot(2,3,1)
-            ax1.plot(x,[self.avg_abs_adj[i][0] for i in range(len(self.avg_abs_adj))],'k-o')
-            ax1.set_xlabel('Iteration Number [#]')
-            ax1.set_ylabel('Origin time Adjustment [sec]')
-            plt.grid()
-            ax1.locator_params(axis='x',nbins=6)
-            ax1.locator_params(axis='y',nbins=6)
-
-            ax2 = plt.subplot(2,3,2)
-            ax2.plot(x,[self.avg_abs_adj[i][1] for i in range(len(self.avg_abs_adj))],'k-o')
-            ax2.set_xlabel('Iteration Number [#]')
-            ax2.set_ylabel('Longitude Adjustment [km]')
-            plt.grid()
-            ax2.locator_params(axis='x',nbins=6)
-            ax2.locator_params(axis='y',nbins=6)
-
-            ax3 = plt.subplot(2,3,3)
-            ax3.plot(x,[self.avg_abs_adj[i][2] for i in range(len(self.avg_abs_adj))],'k-o')
-            ax3.set_xlabel('Iteration Number [#]')
-            ax3.set_ylabel('Latitude Adjustment [km]')
-            plt.grid()
-            ax3.locator_params(axis='x',nbins=6)
-            ax3.locator_params(axis='y',nbins=6)
-
-            ax4 = plt.subplot(2,3,4)
-            ax4.plot(x,[self.avg_abs_adj[i][3] for i in range(len(self.avg_abs_adj))],'k-o')
-            ax4.set_xlabel('Iteration Number [#]')
-            ax4.set_ylabel('Depth Adjustment [km]')
-            plt.grid()
-            ax4.locator_params(axis='x',nbins=6)
-            ax4.locator_params(axis='y',nbins=6)
-
-            ax5 = plt.subplot(2,3,5)
-            ax5.plot(self.rms_res,'k-o')
-            ax5.set_xlabel('Iteration Number [#]')
-            ax5.set_ylabel('RMS-Residual [sec]')
-            plt.grid()
-            ax5.locator_params(axis='x',nbins=6)
-            ax5.locator_params(axis='y',nbins=6)
-
-            ax6 = plt.subplot(2,3,6)
-            
-            for it,c in zip(self.vel_adj,range(len(iter_color))):
-                
-                color = iter_color[c]
-                x,y, ymax = [],[],[]
-                
-                for p in it:
-                    
-                    x.append(p[0])
-                    y.append(p[1])
-                    
-                ymax.append(max([abs(_) for _ in y]))
-                
-                ax6.barh(x,y,color=color,alpha=.5,label='Iter: '+str(c+1))
-
-            ax6.set_xlabel('Velocity Adjusment [km/s]')
-            ax6.set_ylabel('Depth [km]')
-            ax6.set_xlim(-max(ymax),max(ymax))
-            ax6.locator_params(axis='x',nbins=5)
-            ax6.locator_params(axis='y',nbins=6)
-            ax6.set_ylim(ax6.get_ylim()[::-1])
-            plt.grid()
-            plt.legend()
-
-            plt.tight_layout()
-            plt.savefig(os.path.join('figs',self.project_nm,'Analyse_single_I_'+self.project_nm))
-            plt.show()
-
-            # plot results, final velocity, station correction beside final location using new model
-            
-            cnv_dic         = start.read_cnv(inpcnv=os.path.join('velout','final_loc.cnv'))
-            vel_dic,sta_dic = start.read_VelSta()
-
-            print "+++ Plot data statistics ..."
-
-            ovel  = [] # origin
-            odep  = [] # origin
-            stnm  = sta_dic.keys()
-            stlat = [sta_dic[i]['lat'] for i in sta_dic]                # station latitude
-            stlon = [sta_dic[i]['lon'] for i in sta_dic]                # station longitude
-            stref = [sta_dic[i]['rfn'] for i in sta_dic]                # station reference
-            evlat = [cnv_dic[i]['lat'] for i in cnv_dic]                # event latitude
-            evlon = [cnv_dic[i]['lon'] for i in cnv_dic]                # event longitude
-            evdep = [cnv_dic[i]['dep'] for i in cnv_dic]                # event depth
-            evgap = [cnv_dic[i]['gap'] for i in cnv_dic]                # event gap
-            evrms = [cnv_dic[i]['rms'] for i in cnv_dic]                # event rms
-            evarr = [cnv_dic[i]['arr'] for i in cnv_dic]                # event arrival time
-            nump  = [cnv_dic[i]['arr']['wt'].count(0)+
-                     cnv_dic[i]['arr']['wt'].count(1)+
-                     cnv_dic[i]['arr']['wt'].count(2)+
-                     cnv_dic[i]['arr']['wt'].count(3) for i in cnv_dic] # event arrival time number
-            refid = stref.index(max(stref))
-
-            
-            for _,__ in zip(range(len(vel_dic['P']['p_vel'])),range(len(vel_dic['P']['p_dep']))):
-
-                ovel.append(vel_dic['P']['p_vel'][_])
-                ovel.append(vel_dic['P']['p_vel'][__])
-                odep.append(vel_dic['P']['p_dep'][__])
-                odep.append(vel_dic['P']['p_dep'][__])
-                
-            odep.pop(0)
-            odep.append(self.dep_max)
-
-            tmpvel = []
-            tmpdep = []
-
-            for _,__ in zip(self.svel,self.sdep):
-
-                tmpvel.append(_)
-                tmpvel.append(_)
-                tmpdep.append(__)
-                tmpdep.append(__)
-                
-            tmpdep.pop(0)
-            tmpdep.append(self.dep_max)
-
-            self.svel = tmpvel
-            self.sdep = tmpdep
-
-            
-            # plot-No 1, velocity model
-
-            ax1 = plt.subplot(2,2,1)
-            ax1.plot(ovel,odep,color='black',linewidth=2,label='Refrence')
-            ax1.plot(self.svel,self.sdep,color='red'  ,linewidth=2,label='VELEST')
-            xlim = ax1.get_xlim()
-            ylim = ax1.get_ylim()
-            xlim = (self.vel_min,self.vel_max)
-            ylim = [min(odep),max(odep)+0.1*diff(ylim)[0]]
-            ax1.set_xlim(xlim)
-            ax1.set_ylim(ylim)
-            ax1.set_ylim(ax1.get_ylim()[::-1])
-            ax1.set_xlabel('Velocity [km/s]')
-            ax1.set_ylabel('Depth [km]')
-            plt.grid()
-            ax1.legend(numpoints=1)
-            ax1.locator_params(axis='x',nbins=8)
-            ax1.locator_params(axis='y',nbins=6)
-
-            # plot-No 2, station correction
-
-            stnm  = []
-            stlat = []
-            stlon = []
-            stcor = []
-
-            with open(os.path.join('velout','stations_corr.sta')) as f:
-
-                for l in f:
-
-                    if l.strip() and '(a4,f7.4,a1,1x,f8.4,a1,1x,i4,1x,i1,1x,i3,1x,f5.2,2x,f5.2)' not in l:
-
-                        stnm.append(l[0:4])
-                        stlat.append(float(l[4:11]))
-                        stlon.append(float(l[13:21]))
-                        stcor.append(float(l[34:39]))
-
-            stnm  = array(stnm)
-            stlat = array(stlat)
-            stlon = array(stlon)
-            stcor = array(stcor)
-            
-            ax2   = plt.subplot(2,2,2)
-            scl   = 500
-            c   = evrms
-            im  = ax2.scatter(evlon,evlat,color=c,marker='.',s=50,edgecolor='black',cmap=plt.cm.cool)
-            ax2.scatter(stlon[0],stlat[0],s=0.5*scl,marker='+',color='none',linewidth=1,label='+0.5sec')
-            ax2.scatter(stlon[stcor>=0],stlat[stcor>=0],s=stcor*scl,marker='+',color='black',linewidth=1)
-            ax2.scatter(stlon[0],stlat[0],s=0.5*scl,marker='o',color='none',linewidth=1,label='-0.5sec')
-            ax2.scatter(stlon[stcor<0] ,stlat[stcor<0], s=stcor*scl,marker='o',facecolors='none' ,linewidth=1)
-            for x,y,t in zip (stlon,stlat,stnm):
-                ax2.text(x,y,t,fontsize=10)
-            plt.grid()
-            ax2.set_xlabel('Longitude [deg]')
-            ax2.set_ylabel('Latitude [deg]')
-            ax2.set_xlim(self.lon_min,self.lon_max)
-            ax2.set_ylim(self.lat_min,self.lat_max)
-            ax2.locator_params(axis='x',nbins=6)
-            ax2.locator_params(axis='y',nbins=6)
-            leg = ax2.legend()
-            legend = ax2.get_legend()
-            legend.legendHandles[0].set_color('black')
-            legend.legendHandles[1].set_edgecolor('black')
-            cb           = plt.colorbar(im,ax=ax2, label='RMS [second]')
-            tick_locator = ticker.MaxNLocator(nbins=6)
-            cb.locator   = tick_locator
-            cb.update_ticks()
-
-            
-            plt.tight_layout()
-            plt.savefig(os.path.join('figs',self.project_nm,'Analyse_single_II_'+self.project_nm))
-            plt.show()
-
+            pass
 
 
     #*-*-*-*-*- Plot data figures
@@ -1576,8 +1442,9 @@ class main():
 
             os.mkdir(os.path.join('figs',self.project_nm))
 
-        cnv_dic         = self.read_cnv()
-        vel_dic,sta_dic = self.read_VelSta()
+        cnv_dic         = self.read_cnv(self.input_dic['EQ_datafile'])
+        vel_dic,sta_dic = self.read_VelSta(inp_vel=os.path.join('velinp',self.velmod_name),inp_sta=self.input_dic['Stationfile'])
+
 
         self.sta_list = {}
 
@@ -1640,7 +1507,7 @@ class main():
         plt.grid()
         ax1.legend(numpoints=1)
         ax1.locator_params(axis='x',nbins=8)
-        ax1.locator_params(axis='y',nbins=6)
+        ax1.locator_params(axis='y',nbins=5)
 
         # plot-No 2, station-event distribution
 
@@ -1648,21 +1515,22 @@ class main():
 
         # plot some features
 
-        self.m = Basemap(llcrnrlon=self.lon_min, llcrnrlat=self.lat_min,
-                    urcrnrlon=self.lon_max, urcrnrlat=self.lat_max,fix_aspect=False)
-        self.tehran = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
-        self.x,self.y    = self.tehran[:,0], self.tehran[:,1]
+        self.m        = Basemap(llcrnrlon=self.lon_min, llcrnrlat=self.lat_min,urcrnrlon=self.lon_max, urcrnrlat=self.lat_max,
+                                fix_aspect=False)
+        self.tehran   = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
+        self.x,self.y = self.tehran[:,0], self.tehran[:,1]
+
         self.m.plot(self.x,self.y, marker=None,color='r',linewidth=2.0,zorder=1)
+        
         ax2.text(51.3890, 35.6892, '$Tehran$')
         ax2.plot(51.3700, 35.6892,marker='s', markersize=5, color='k')
-
 
         #____ Faults, Borders
 
         self.m.readshapefile(path.join('gdb','db','IRN_PROV','IRN_adm0'),'iran')
         self.m.readshapefile(path.join('gdb','db','IRN_PROV','IRN_adm1'),'prov', color='grey')
 
-        #____ Ticks
+        #____ Ticks on parallels and meridians
 
         parallels = linspace(self.lat_min, self.lat_max, 5)
         meridians = linspace(self.lon_min, self.lon_max, 5)
@@ -1670,8 +1538,9 @@ class main():
         #____ Labels = [left,right,top,bottom]
 
         parallels = linspace(self.lat_min,self.lat_max,5)
-        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
         meridians = linspace(self.lon_min,self.lon_max,5)
+
+        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
         self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0)
 
         #____ Scale & North sing
@@ -1694,26 +1563,27 @@ class main():
         ax2.text(self.txt_x,self.txt_y,str(self.scale_len)+' km',
                 horizontalalignment='center')
 
-        ax2.text(0.03,0.07,'N',horizontalalignment='center',transform=ax2.transAxes)
-        self.txt_y     = self.sc_lat_ed + 3*abs(diff([self.sc_lat_ed,min(ax2.get_ylim())]))
-        ax2.plot(0.03,0.14,'k^',ms=10,transform=ax2.transAxes)
+        ax2.annotate('N', xy=(.030, .07), xycoords='axes fraction', fontsize=16,  ha='center', va='bottom')
+        ax2.annotate('^', xy=(.031, .09), xycoords='axes fraction', fontsize=22,  ha='center', va='bottom')
 
         c   = evrms
-        im  = ax2.scatter(evlon,evlat,color=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool)
-        ax2.scatter(stlon,stlat, s=200, marker='^', edgecolor='red', linewidth='3', facecolor='y')
-        ax2.scatter(stlon[refid],stlat[refid], s=200, marker='^', edgecolor='g', linewidth='3', facecolor='r',label='Reference Station')
+        im  = ax2.scatter(evlon,evlat,c=c,marker='.',s=75,linewidth=None,edgecolor='black',cmap=plt.cm.cool, vmin=0.0, vmax=self.max_rms)
+        ax2.scatter(stlon,stlat, s=100, marker='^', edgecolor='red', linewidth=1.5, facecolor='y',alpha=0.5)
+        ax2.scatter(stlon[refid],stlat[refid], s=150, marker='^', edgecolor='g', linewidth=1.5, facecolor='r',label='Reference')
 
         for x,y,t in zip (stlon,stlat,stnm):
             
             if self.lon_min<=x<=self.lon_max and self.lat_min<=y<=self.lat_max:
                 
-                ax2.text(x,y,t,fontsize=10)
+                ax2.text(x,y-.03,t,fontsize=10, ha='center',bbox=dict(facecolor='w', edgecolor='k', boxstyle='round,pad=.2'))
                 
-        plt.grid()
-        ax2.locator_params(axis='x',nbins=6)
-        ax2.locator_params(axis='y',nbins=6)
+        ax2.grid(True)
+        ax2.locator_params(axis='x',nbins=5)
+        ax2.locator_params(axis='y',nbins=5)
         ax2.legend(loc=1, fontsize=12)
-        cb           = plt.colorbar(im,ax=ax2, label='RMS [second]')
+        divider      = make_axes_locatable(ax2)
+        cax          = divider.append_axes("right", size="2%", pad=0.05)
+        cb           = plt.colorbar(im, ax=ax2, cax=cax, label='RMS [second]')
         tick_locator = ticker.MaxNLocator(nbins=6)
         cb.locator   = tick_locator
         cb.update_ticks()
@@ -1724,28 +1594,34 @@ class main():
 
         ax3 = plt.subplot(2,2,3)
         c   = evrms
-        im  = ax3.scatter(evdep,nump,color=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool)
+        im  = ax3.scatter(evdep,nump,c=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool, vmin=0.0, vmax=self.max_rms)
         plt.grid()
         ax3.set_xlabel('Depth [km]')
         ax3.set_ylabel('Number of Phases [P,S]')
-        ax3.locator_params(axis='x',nbins=6)
-        ax3.locator_params(axis='y',nbins=6)
-        cb           = plt.colorbar(im,ax=ax3, label='RMS [second]')
+        ax3.set_xlim(0,max(evdep))
+        ax3.locator_params(axis='x',nbins=5)
+        ax3.locator_params(axis='y',nbins=5)
+        divider      = make_axes_locatable(ax3)
+        cax          = divider.append_axes("right", size="2%", pad=0.05)
+        cb           = plt.colorbar(im, ax=ax3, cax=cax, label='RMS [second]')
         tick_locator = ticker.MaxNLocator(nbins=6)
         cb.locator   = tick_locator
         cb.update_ticks()
 
         # plot-No 4, gap-number_of_station distribution
 
-        ax3 = plt.subplot(2,2,4)
+        ax4 = plt.subplot(2,2,4)
         c   = evrms
-        im  = ax3.scatter(evgap,nump,color=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool)
+        im  = ax4.scatter(evgap,nump,c=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool, vmin=0.0, vmax=self.max_rms)
         plt.grid()
-        ax3.set_xlabel('Azimuthal Gap [deg]')
-        ax3.set_ylabel('Number of Phases [P,S]')
-        ax3.locator_params(axis='x',nbins=6)
-        ax3.locator_params(axis='y',nbins=6)
-        cb           = plt.colorbar(im,ax=ax3, label='RMS [second]')
+        ax4.set_xlabel('Azimuthal Gap [deg]')
+        ax4.set_ylabel('Number of Phases [P,S]')
+        ax4.set_xlim(min(evgap),max(evgap))
+        ax4.locator_params(axis='x',nbins=5)
+        ax4.locator_params(axis='y',nbins=5)
+        divider      = make_axes_locatable(ax4)
+        cax          = divider.append_axes("right", size="2%", pad=0.05)
+        cb           = plt.colorbar(im, ax=ax4, cax=cax, label='RMS [second]')
         tick_locator = ticker.MaxNLocator(nbins=6)
         cb.locator   = tick_locator
         cb.update_ticks()
@@ -1753,6 +1629,7 @@ class main():
         plt.tight_layout()
         plt.savefig(os.path.join('figs',self.project_nm,'data_'+self.project_nm))
         plt.show()
+        plt.close()
 
 
     ############################################## 
@@ -1765,13 +1642,14 @@ class main():
 
         print "+++ Preparing reports ..."
 
-        self.repfi     = open(os.path.join('figs',self.project_nm,'report.dat'),'w')
+        self.repfi    = open(os.path.join('figs',self.project_nm,'report.dat'),'w')
+        self.modout   = open(os.path.join('figs',self.project_nm,'model.mod'),'w')
 
-        velocity_res = self.svel
-        dep_res      = self.sdep
-        minmod_id    = self.ind
-        min_mod      = [self.svel[self.ind],self.sdep[self.ind]]
-        mean_mod     = [mean(self.svel,axis=0),mean(self.sdep,axis=0)]
+        velocity_res  = self.svel_p
+        dep_res       = self.sdep_p
+        minmod_id     = self.ind
+        self.min_mod  = [self.svel_p[self.ind],self.sdep_p[self.ind]]
+        self.mean_mod = [mean(self.svel_p,axis=0),mean(self.sdep_p,axis=0)]
 
         self.repfi.write('Sumarry Report on final results\n\n')
         self.repfi.write('# 1- Minimum velocity model\n\n')
@@ -1788,9 +1666,9 @@ class main():
                          
         self.repfi.write('\nVel[km/s]   Dep[km]\n')
 
-        min_mod[1][0] = 0.0 # set first depth to zero
+        self.min_mod[1][0] = 0.0 # set first depth to zero
         
-        for v,d in zip(min_mod[0][::2],min_mod[1][::2]):
+        for v,d in zip(self.min_mod[0][::2],self.min_mod[1][::2]):
             
             self.repfi.write(' %4.1f      %4.1f\n'%(v,d))
 
@@ -1798,9 +1676,9 @@ class main():
 
         self.repfi.write('Vel[km/s]   Dep[km]\n')
 
-        mean_mod[1][0] = 0.0 # set first depth to zero
+        self.mean_mod[1][0] = 0.0 # set first depth to zero
         
-        for v,d in zip(mean_mod[0][::2],mean_mod[1][::2]):
+        for v,d in zip(self.mean_mod[0][::2],self.mean_mod[1][::2]):
             
             self.repfi.write(' %4.1f      %4.1f\n'%(v,d))
             
@@ -1808,10 +1686,99 @@ class main():
 
         # copy final loc and station_corr files
         
-        copy(os.path.join('velout','final_loc'+str(self.ind+1)+'.cnv'),os.path.join('figs',self.project_nm,'fin_hyp.cnv'))
-        copy(os.path.join('velout','stations_corr'+str(self.ind+1)+'.sta'),os.path.join('figs',self.project_nm,'sta_cor.out'))
+        copy(os.path.join('velout',self.project_nm,'final_loc'+str(self.ind+1)+'.cnv'),os.path.join('figs',self.project_nm,'fin_hyp.cnv'))
+        copy(os.path.join('velout',self.project_nm,'stations_corr'+str(self.ind+1)+'.sta'),os.path.join('figs',self.project_nm,'sta_cor.out'))
 
 
+        # write min and mean velocity model for next velest run
+
+        self.min_mod[1][0]  = self.dep_min # set first depth to highest elevation
+        self.mean_mod[1][0] = self.dep_min # set first depth to highest elevation
+
+        # min model
+        
+        self.modout.write(' Model: min.mod\n')
+        self.modout.write(' %2d        vel,depth,vdamp,phase(f5.2,5x,f7.2,2x,f7.3,3x,a1)\n'%(len(self.min_mod[0][::2])))
+
+        # P-Velocity
+        
+        flag = True
+        
+        for v,d in zip(self.min_mod[0][::2],self.min_mod[1][::2]):
+
+            if flag:
+
+                self.modout.write(' %4.2f       %5.2f    1.000           P-VELOCITY MODEL\n'%(v,d))
+                
+                flag = False
+
+                continue
+                
+            self.modout.write(' %4.2f       %5.2f    1.000\n'%(v,d))
+            
+        self.modout.write(' %2d\n'%(len(self.min_mod[0][::2])))
+
+        # S-Velocity
+        
+        flag = True
+        
+        for v,d in zip(self.min_mod[0][::2],self.min_mod[1][::2]):
+            
+            if flag:
+
+                self.modout.write(' %4.2f       %5.2f    1.000           S-VELOCITY MODEL\n'%(v/self.vpvs,d))
+                
+                flag = False
+
+                continue
+                
+            self.modout.write(' %4.2f       %5.2f    1.000\n'%(v/self.vpvs,d))
+
+        # now append mean model
+
+        self.modout.write('\n')
+        
+        self.modout.write(' Model: mean.mod\n')
+        self.modout.write(' %2d        vel,depth,vdamp,phase(f5.2,5x,f7.2,2x,f7.3,3x,a1)\n'%(len(self.mean_mod[0][::2])))
+
+        # P-Velocity
+        
+        flag = True
+        
+        for v,d in zip(self.mean_mod[0][::2],self.mean_mod[1][::2]):
+
+            if flag:
+
+                self.modout.write(' %4.2f       %5.2f    1.000           P-VELOCITY MODEL\n'%(v,d))
+                
+                flag = False
+
+                continue
+                
+            self.modout.write(' %4.2f       %5.2f    1.000\n'%(v,d))
+            
+        self.modout.write(' %2d\n'%(len(self.mean_mod[0][::2])))
+
+        # S-Velocity
+       
+        flag = True
+       
+        for v,d in zip(self.mean_mod[0][::2],self.mean_mod[1][::2]):
+            
+            if flag:
+
+                self.modout.write(' %4.2f       %5.2f    1.000           S-VELOCITY MODEL\n'%(v/self.vpvs,d))
+
+                flag = False
+
+                continue
+                
+            self.modout.write(' %4.2f       %5.2f    1.000\n'%(v/self.vpvs,d))
+
+        self.modout.write('\n')
+        
+        self.modout.close()
+        
         # locate using new velociy model and make a comparison
         
         here = os.getcwd()
@@ -1832,31 +1799,32 @@ class main():
         dep_err_rw = []
         rms_rw     = []
         
-        if os.path.exists(os.path.join('tmp','report')):
+        if os.path.exists(os.path.join('tmp',self.project_nm,'report')):
             
-            rmtree(os.path.join('tmp','report'))
-            os.mkdir(os.path.join('tmp','report'))
+            rmtree(os.path.join('tmp',self.project_nm,'report'))
+            os.mkdir(os.path.join('tmp',self.project_nm,'report'))
             
         else:
             
-            os.mkdir(os.path.join('tmp','report'))
+            os.mkdir(os.path.join('tmp',self.project_nm,'report'))
 
 
-        os.mkdir(os.path.join('tmp','report','initial'))
-        os.mkdir(os.path.join('tmp','report','final'))
+        os.mkdir(os.path.join('tmp',self.project_nm,'report','initial'))
+        os.mkdir(os.path.join('tmp',self.project_nm,'report','final'))
 
+        # copy "select.out" and "STATION0.HYP" from "tools" directory
+        
+        copy(os.path.join('tools','select.out'),os.path.join('tmp',self.project_nm,'report','initial'))
+        copy(os.path.join('tools','STATION0.HYP'),os.path.join('tmp',self.project_nm,'report','initial'))
 
-        copy(os.path.join('tools','select.out'),os.path.join('tmp','report','initial'))
-        copy(os.path.join('tools','STATION0.HYP'),os.path.join('tmp','report','initial'))
+        # make initial result
 
-        # initial result
-
-        hyp_par = open(os.path.join('tmp','report','initial','hyp.par'),'w')
+        hyp_par = open(os.path.join('tmp',self.project_nm,'report','initial','hyp.par'),'w')
         hyp_par.write('select.out\n')
         hyp_par.write('n\n\n')
         hyp_par.close()
 
-        os.chdir(os.path.join('tmp','report','initial'))
+        os.chdir(os.path.join('tmp',self.project_nm,'report','initial'))
         os.system('hyp < hyp.par > /dev/null')
         os.remove('gmap.cur.kml')
         os.remove('hypmag.out')
@@ -1873,9 +1841,10 @@ class main():
                     
         os.chdir(here)
 
-        # final result
-
-        copy(os.path.join('tools','select.out'),os.path.join('tmp','report','final'))
+        # make final result
+        # copy "select.out" from "tools" directory
+        
+        copy(os.path.join('tools','select.out'),os.path.join('tmp',self.project_nm,'report','final'))
 
         vel        = []
         vel_flag   = True
@@ -1906,9 +1875,9 @@ class main():
                     
                     vel.append(l)
                 
-        copy(os.path.join('figs',self.project_nm,'sta_cor.out'),os.path.join('tmp','report','final'))
+        copy(os.path.join('figs',self.project_nm,'sta_cor.out'),os.path.join('tmp',self.project_nm,'report','final'))
                 
-        os.chdir(os.path.join('tmp','report','final'))
+        os.chdir(os.path.join('tmp',self.project_nm,'report','final'))
 
         sta_cor = []
         
@@ -1979,8 +1948,8 @@ RESET TEST(91)=0.1
             station0_hyp.write(v)
             
         station0_hyp.write('\n')
-        station0_hyp.write('15.0   50. 300. 1.71    \n')
-        station0_hyp.write('THM\n')
+        station0_hyp.write('15.0   50. 300. %4.2f    \n'%(self.vpvs))
+        station0_hyp.write('SLT\n')
         station0_hyp.close()
 
         copy('select.out','hyp.out')
@@ -2090,7 +2059,7 @@ RESET TEST(91)=0.1
         # relocate one more time using re-weighted phase based on the mean residual of
         # each station which has been claculated after the first relocation with station correction
 
-        os.chdir(os.path.join('tmp','report','final'))
+        os.chdir(os.path.join('tmp',self.project_nm,'report','final'))
 
         sta_wt     = {}
         bad_evnt   = list(array(bad_events).copy())
@@ -2296,11 +2265,16 @@ RESET TEST(91)=0.1
 
         evt_dic = Read_Nordic(nordic_inp)
 
-        stnm  = self.sta_list.keys()
-        stlat = [self.sta_list[i]['lat'] for i in self.sta_list]                # station latitude
-        stlon = [self.sta_list[i]['lon'] for i in self.sta_list]                # station longitude
-        
-        fig = plt.figure(figsize=(10,6))
+        vel_dic,sta_dic = self.read_VelSta(inp_vel=os.path.join('velinp',self.velmod_name),inp_sta=self.input_dic['Stationfile'])
+
+        self.sta_list = {}
+
+        stnm  = sta_dic.keys()
+        stlat = [sta_dic[i]['lat'] for i in sta_dic]                # station latitude
+        stlon = [sta_dic[i]['lon'] for i in sta_dic]                # station longitude
+
+
+        fig = plt.figure()
         ax  = plt.subplot(1,1,1)
 
         evrms = []
@@ -2316,25 +2290,27 @@ RESET TEST(91)=0.1
             evlat.append(elat)
 
             for sta in evt_dic[evt]['PHASE']:
+                
+                _ = sta.ljust(4)
 
                 try:
 
-                    slat = self.sta_list[sta]['lat']
-                    slon = self.sta_list[sta]['lon']
-                    ax.plot([elon,slon],[elat,slat],color='grey',zorder=1)
+                    slat = sta_dic[_]['lat']
+                    slon = sta_dic[_]['lon']
+                    ax.plot([elon,slon],[elat,slat],color='grey',linewidth=.7,zorder=1)
 
                 except KeyError:
 
                     pass
                 
-        # plot station-event distribution
+        # plot station-event distribution, ray-path
 
         # plot some features
 
-        self.m = Basemap(llcrnrlon=self.lon_min, llcrnrlat=self.lat_min,
-                    urcrnrlon=self.lon_max, urcrnrlat=self.lat_max,fix_aspect=False)
-        self.tehran = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
-        self.x,self.y    = self.tehran[:,0], self.tehran[:,1]
+        self.m        = Basemap(llcrnrlon=self.lon_min, llcrnrlat=self.lat_min,urcrnrlon=self.lon_max, urcrnrlat=self.lat_max,
+                                fix_aspect=False)
+        self.tehran   = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
+        self.x,self.y = self.tehran[:,0], self.tehran[:,1]
         self.m.plot(self.x,self.y, marker=None,color='r',linewidth=2.0,zorder=1)
         ax.text(51.3890, 35.6892, '$Tehran$')
         ax.plot(51.3700, 35.6892,marker='s', markersize=5, color='k')
@@ -2376,29 +2352,25 @@ RESET TEST(91)=0.1
         ax.text(self.txt_x,self.txt_y,str(self.scale_len)+' km',
                 horizontalalignment='center')
 
-        ax.text(0.03,0.07,'N',horizontalalignment='center',transform=ax.transAxes)
-        self.txt_y     = self.sc_lat_ed + 3*abs(diff([self.sc_lat_ed,min(ax.get_ylim())]))
-        ax.plot(0.03,0.14,'k^',ms=10,transform=ax.transAxes)
+        ax.annotate('N', xy=(.030, .07), xycoords='axes fraction', fontsize=16,  ha='center', va='bottom')
+        ax.annotate('^', xy=(.031, .09), xycoords='axes fraction', fontsize=22,  ha='center', va='bottom')
 
         c   = evrms
-        im  = ax.scatter(evlon,evlat,color=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool,zorder=19)
-        ax.scatter(stlon,stlat, s=200, marker='^', edgecolor='red', linewidth='3', facecolor='y',zorder=20)
-
-        for x,y,t in zip (stlon,stlat,stnm):
-            
-            if self.lon_min<=x<=self.lon_max and self.lat_min<=y<=self.lat_max:
+        im  = ax.scatter(evlon,evlat,c=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool,zorder=4,vmin=0.0, vmax=self.max_rms)
+        ax.scatter(stlon,stlat, s=200, marker='^', edgecolor='red', linewidth=1.5, facecolor='y',zorder=5,alpha=0.9)
                 
-                ax.text(x,y,t,fontsize=10)
-                
-        plt.grid()
-        ax.locator_params(axis='x',nbins=6)
-        ax.locator_params(axis='y',nbins=6)
-        cb           = plt.colorbar(im,ax=ax, label='RMS [second]')
+        ax.grid(True)
+        ax.locator_params(axis='x',nbins=5)
+        ax.locator_params(axis='y',nbins=5)
+        divider      = make_axes_locatable(ax)
+        cax          = divider.append_axes("right", size="2%", pad=0.05)
+        cb           = plt.colorbar(im, ax=ax, cax=cax, label='RMS [second]')
         tick_locator = ticker.MaxNLocator(nbins=6)
         cb.locator   = tick_locator
         cb.update_ticks()
         ax.set_xlim(self.lon_min,self.lon_max)
         ax.set_ylim(self.lat_min,self.lat_max)
+        ax.set_title('$Path Coverage$')
 
         plt.savefig(os.path.join('figs',self.project_nm,'path_'+self.project_nm))
         plt.close()
@@ -2415,37 +2387,49 @@ RESET TEST(91)=0.1
 
         def cpt2seg(file_name, sym=False, discrete=False):
 
-            dic = {}
-            f = open(file_name, 'r')
-            rgb = loadtxt(f)
-            rgb = rgb/255.
-            s = shape(rgb)
+            dic    = {}
+            f      = open(file_name, 'r')
+            rgb    = loadtxt(f)
+            rgb    = rgb/255.
+            s      = shape(rgb)
             colors = ['red', 'green', 'blue']
+            
             for c in colors:
+                
                 i = colors.index(c)
                 x = rgb[:, i+1]
 
                 if discrete:
+                    
                     if sym:
-                        dic[c] = zeros((2*s[0]+1, 3), dtype=float)
+                        
+                        dic[c]      = zeros((2*s[0]+1, 3), dtype=float)
                         dic[c][:,0] = linspace(0,1,2*s[0]+1)
-                        vec = concatenate((x ,x[::-1]))
+                        vec         = concatenate((x ,x[::-1]))
+                        
                     else:
-                        dic[c] = zeros((s[0]+1, 3), dtype=float)
+                        
+                        dic[c]      = zeros((s[0]+1, 3), dtype=float)
                         dic[c][:,0] = linspace(0,1,s[0]+1)
-                        vec = x
+                        vec         = x
+                        
                     dic[c][1:, 1] = vec
                     dic[c][:-1,2] = vec
                        
                 else:
+                    
                     if sym:
-                        dic[c] = zeros((2*s[0], 3), dtype=float)
+                        
+                        dic[c]      = zeros((2*s[0], 3), dtype=float)
                         dic[c][:,0] = linspace(0,1,2*s[0])
-                        vec = concatenate((x ,x[::-1]))
+                        vec         = concatenate((x ,x[::-1]))
+                        
                     else:
-                        dic[c] = zeros((s[0], 3), dtype=float)
+                        
+                        dic[c]      = zeros((s[0], 3), dtype=float)
                         dic[c][:,0] = linspace(0,1,s[0])
-                        vec = x
+                        vec         = x
+                        
                     dic[c][:, 1] = vec
                     dic[c][:, 2] = vec
            
@@ -2457,7 +2441,8 @@ RESET TEST(91)=0.1
         def eigsorted(cov):
 
             vals, vecs = linalg.eigh(cov)
-            order = vals.argsort()[::-1]
+            order      = vals.argsort()[::-1]
+            
             return vals[order], vecs[:,order]
 
         def extract_hyp(hyp_path, region):
@@ -2477,22 +2462,26 @@ RESET TEST(91)=0.1
 
                         y    = nordic_dic[evt]['HEADER']['L1']['Year']
                         m    = nordic_dic[evt]['HEADER']['L1']['Month']
-                        d    = nordic_dic[evt]['HEADER']['L1']['Day']
-                        H    = nordic_dic[evt]['HEADER']['L1']['Hour']
-                        M    = nordic_dic[evt]['HEADER']['L1']['Min']
-                        S    = nordic_dic[evt]['HEADER']['L1']['Sec']
+                        d    = float(nordic_dic[evt]['HEADER']['L1']['Day'])
+                        H    = float(nordic_dic[evt]['HEADER']['L1']['Hour'])
+                        M    = float(nordic_dic[evt]['HEADER']['L1']['Min'])
+                        S    = float(nordic_dic[evt]['HEADER']['L1']['Sec'])
 
-                        if float(S)>=60.0:
+                        if S >= 60:
 
-                            S = 0
-                            M = float(M)+1
+                            S = S - 60
+                            M+=1
 
-                        if float(M)>=60.0:
+                        if M >= 60:
 
-                            M = 0
-                            H = float(H)+1
+                            M = M - 60
+                            H+=1
 
-                            
+                        if H >= 24:
+
+                            H = H - 24
+                            d+=1
+
                         ot   = '%4d%02d%02d %02d%02d%04.1f'%(y,m,d,H,M,S)
                         ot   = dt.strptime(ot,'%Y%m%d %H%M%S.%f')
                         hyp_dic[ot] = {} 
@@ -2500,26 +2489,32 @@ RESET TEST(91)=0.1
                         hyp_dic[ot]['evlon'] = nordic_dic[evt]['HEADER']['L1']['Lon']
                         hyp_dic[ot]['evdep'] = nordic_dic[evt]['HEADER']['L1']['Dep']
                         hyp_dic[ot]['evmag'] = nordic_dic[evt]['HEADER']['L1']['Mag1']
-                        hyp_dic[ot]['evno'] = nordic_dic[evt]['HEADER']['L1']['NumS']
-                        hyp_dic[ot]['evdmin'] = min([nordic_dic[evt]['PHASE'][k]['P']['DIS'] for k in nordic_dic[evt]['PHASE'].keys()
-                                                     if nordic_dic[evt]['PHASE'][k]['P']])
-                        hyp_dic[ot]['evrms'] = nordic_dic[evt]['HEADER']['L1']['RMS']
+                        hyp_dic[ot]['evno']  = nordic_dic[evt]['HEADER']['L1']['NumS']
+                        hyp_dic[ot]['evdmin'] = []
+
+                        for k in nordic_dic[evt]['PHASE']:
+
+                            for Pphase in nordic_dic[evt]['PHASE'][k]['P']:
+
+                                hyp_dic[ot]['evdmin'].append(nordic_dic[evt]['PHASE'][k]['P'][Pphase]['DIS'])
+
+                        hyp_dic[ot]['evdmin'] = min(hyp_dic[ot]['evdmin'])        
+                        hyp_dic[ot]['evrms']  = nordic_dic[evt]['HEADER']['L1']['RMS']
                         
-                        if nordic_dic[evt]['HEADER']['LE']['LOE'] and nordic_dic[evt]['HEADER']['LE']['LOE']:
+                        if nordic_dic[evt]['HEADER']['LE']['LAE'] and nordic_dic[evt]['HEADER']['LE']['LOE']:
 
                             hyp_dic[ot]['evgap'] = nordic_dic[evt]['HEADER']['LE']['GAP']
-                            hyp_dic[ot]['everh'] = sqrt(nordic_dic[evt]['HEADER']['LE']['LOE']**2+nordic_dic[evt]['HEADER']['LE']['LOE']**2)
+                            hyp_dic[ot]['everh'] = sqrt(nordic_dic[evt]['HEADER']['LE']['LAE']**2 + nordic_dic[evt]['HEADER']['LE']['LOE']**2)
                             hyp_dic[ot]['everx'] = nordic_dic[evt]['HEADER']['LE']['LOE']
                             hyp_dic[ot]['every'] = nordic_dic[evt]['HEADER']['LE']['LAE']
                             hyp_dic[ot]['everz'] = nordic_dic[evt]['HEADER']['LE']['DEE']
                             hyp_dic[ot]['evcxy'] = nordic_dic[evt]['HEADER']['LE']['CXY']
                             cov = array([[hyp_dic[ot]['everx']**2, hyp_dic[ot]['evcxy']], [hyp_dic[ot]['evcxy'], hyp_dic[ot]['every']**2]])
 
-                            vals, vecs = eigsorted(cov)
-                            theta = degrees(arctan2(*vecs[:,0][::-1]))
-                            width, height = 2 * self.nstd * sqrt(vals)
-                            ellip = [(hyp_dic[ot]['evlon'],hyp_dic[ot]['evlat']),
-                                     k2d(width), k2d(height), theta]
+                            vals, vecs            = eigsorted(cov)
+                            theta                 = degrees(arctan2(*vecs[:,0][::-1]))
+                            width, height         = 2 * self.nstd * sqrt(vals)
+                            ellip                 = [(hyp_dic[ot]['evlon'],hyp_dic[ot]['evlat']),k2d(width), k2d(height), theta]
                             hyp_dic[ot]['elipse'] = ellip
 
             return hyp_dic
@@ -2537,8 +2532,18 @@ RESET TEST(91)=0.1
                    str(region[3])+" "+
                    fid+" cliped.tif > /dev/null")
 
-            ds = gdal.Open('cliped.tif')
-            z  = ds.ReadAsArray()[::-1,:]
+            ds  = gdal.Open('cliped.tif')
+            z   = ds.ReadAsArray()[::-1,:]
+            lnv = float(self.bat_dep) # replace large negative values in z
+            
+            if z.min() <= -1000.0:
+
+                bad_val = z.min()
+                
+                for i in z:
+
+                    i[i==bad_val] = lnv
+                
             savez('cliped.npz',elevation=array(z))
             remove('cliped.tif')
 
@@ -2548,17 +2553,21 @@ RESET TEST(91)=0.1
 
         #_________ Extract topography
 
-        tif2npz(fid=self.srtm_tif, region=[self.lon_min, self.lon_max,
-                                           self.lat_min, self.lat_max],
-                res_x=self.res_x, res_y=self.res_y)
+        if self.topo_flag == 'True':
 
-        with load("cliped.npz") as dem:
-            
-            self.elev = dem['elevation']
+            tif2npz(fid=self.srtm_tif, region=[self.lon_min, self.lon_max, self.lat_min, self.lat_max],
+                    res_x=self.res_x, res_y=self.res_y)
 
-        remove("cliped.npz")
+            with load("cliped.npz") as dem:
+                
+                self.elev = dem['elevation']
+
+            remove("cliped.npz")
 
         #_________ Extract events
+
+        self.iniloc_file = os.path.join('tools','select.out')
+        self.finloc_file = os.path.join('tmp',self.project_nm,'report','final','hyp.out')
 
         self.ini = extract_hyp(hyp_path=self.iniloc_file, region=[self.lon_min, self.lon_max,
                                                              self.lat_min, self.lat_max])
@@ -2585,12 +2594,10 @@ RESET TEST(91)=0.1
                         self.tdiff = d-e
                         self.tdiff = abs(self.tdiff.total_seconds())
 
-                        if self.tdiff < self.max_tdf:
+                        if self.tdiff <= self.max_tdf:
 
                             self.events.append([self.ini[d]['evlon'],self.ini[d]['evlat'],
-                                                self.fin[e]['evlon'],self.fin[e]['evlat']])
-
-                
+                                                self.fin[e]['evlon'],self.fin[e]['evlat']])               
 
             self.events = array(self.events)
             self.color  = self.events[:,2]    # color --> dep 
@@ -2598,7 +2605,7 @@ RESET TEST(91)=0.1
             #_________ Plot
 
             fig = plt.figure()
-            ax  = plt.subplot(1,1,1)  
+            ax  = plt.subplot(1,1,1)
             s   = 10
 
             #____ Main frame
@@ -2621,8 +2628,6 @@ RESET TEST(91)=0.1
 
                 self.cmap = self.pltcpt
 
-
-
             if self.topo_flag == 'True':
 
                 self.ve   = 0.05
@@ -2637,9 +2642,11 @@ RESET TEST(91)=0.1
                     
             #____ Tehran border, symbol and label
 
-            self.tehran = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
-            self.x,self.y    = self.tehran[:,0], self.tehran[:,1]
+            self.tehran      = loadtxt(path.join('gdb','db','IRN_PROV','tehran.poly'))
+            self.x, self.y   = self.tehran[:,0], self.tehran[:,1]
+            
             self.m.plot(self.x,self.y, marker=None,color='r',linewidth=2.0,zorder=1)
+            
             ax.text(51.3890, 35.6892, '$Tehran$')
             ax.plot(51.3700, 35.6892,marker='s', markersize=5, color='k')
 
@@ -2667,7 +2674,7 @@ RESET TEST(91)=0.1
                             self.clr = self.color[(self.events[:,3]>5)]
                             self.x,self.y = self.tmp[:,0],self.tmp[:,1]
 
-                            sc = ax.scatter(self.x,self.y, s=s, c=self.clr,
+                            im = ax.scatter(self.x,self.y, s=s, c=self.clr,
                                             vmin=self.dep_min, vmax=self.dep_max,
                                            alpha=1.0, cmap=plt.cm.bwr, edgecolor='w',zorder=20)
 
@@ -2676,12 +2683,10 @@ RESET TEST(91)=0.1
 
                     self.x,self.y = self.events[:,0],self.events[:,1]
 
-                    sc = ax.scatter(self.x,self.y, s=100, c=self.color,
+                    im = ax.scatter(self.x,self.y, s=75, c='red',
                                     vmin=self.dep_min, vmax=self.dep_max,
                                    alpha=1.0, cmap=plt.cm.bwr, edgecolor='w',zorder=20)
-
-                plt.colorbar(sc,label='Depth [km]')
-
+                
                 for _ in db:
 
                     pos    = self.m(db[_]['elipse'][0][0],db[_]['elipse'][0][1])
@@ -2698,14 +2703,16 @@ RESET TEST(91)=0.1
                 for x0,y0,x1,y1 in self.events:
 
                     ax.arrow(x0,y0,diff([x0,x1])[0],diff([y0,y1])[0],
-                             head_length=0.02,head_width=0.02,width=0.005,fc='b', ec='b')
+                             head_length=0.01,head_width=0.01,width=0.002,fc='b', ec='b')
                   
 
             #____ Faults
 
-            self.m.readshapefile(path.join('gdb','db','IRN_FLT','fault_iran'),'fault',linewidth=1.5)
-            self.m.readshapefile(path.join('gdb','db','IRN_PROV','IRN_adm0'),'iran')
-            self.m.readshapefile(path.join('gdb','db','IRN_PROV','IRN_adm1'),'prov', color='grey')
+            if self.plt_flt == 'True':
+
+                self.m.readshapefile(path.join('gdb','db','IRN_FLT','fault_iran'),'fault',linewidth=1.5)
+                self.m.readshapefile(path.join('gdb','db','IRN_PROV','IRN_adm0'),'iran')
+                self.m.readshapefile(path.join('gdb','db','IRN_PROV','IRN_adm1'),'prov', color='grey')
 
             #____ Ticks
 
@@ -2739,10 +2746,8 @@ RESET TEST(91)=0.1
             ax.text(self.txt_x,self.txt_y,str(self.scale_len)+' km',
                     horizontalalignment='center')
 
-            ax.text(0.03,0.05,'N',horizontalalignment='center',transform=ax.transAxes)
-            self.txt_y     = self.sc_lat_ed + 3*abs(diff([self.sc_lat_ed,min(ax.get_ylim())]))
-            ax.plot(0.03,0.08,'k^',ms=10,transform=ax.transAxes)
-            
+            ax.annotate('N', xy=(.030, .07), xycoords='axes fraction', fontsize=16,  ha='center', va='bottom')
+            ax.annotate('^', xy=(.031, .09), xycoords='axes fraction', fontsize=22,  ha='center', va='bottom')
 
 
             #____ Save Figs
@@ -2759,7 +2764,10 @@ RESET TEST(91)=0.1
 
                 n = 'diff_'+self.project_nm
 
+            ax.set_aspect('equal')
+
             plt.savefig(path.join('figs',self.project_nm,'topo_'+n+'.png'),dpi=300)
+            plt.close()
 
             self.dbc+=1
 
@@ -2771,7 +2779,7 @@ RESET TEST(91)=0.1
 
         self.sta_list = {}
 
-        with open(os.path.join('tmp','report','final','STATION0.HYP')) as f:
+        with open(os.path.join('tmp',self.project_nm,'report','final','STATION0.HYP')) as f:
 
             for l in f:
 
@@ -2826,7 +2834,7 @@ RESET TEST(91)=0.1
         
 
                                   
-        ax1 = plt.axes([0.05, 0.45, .5, .5])
+        ax1 = plt.axes([0.05, 0.45, .45, .5])
 
         # plot some features
 
@@ -2874,9 +2882,8 @@ RESET TEST(91)=0.1
         ax1.text(self.txt_x,self.txt_y,str(self.scale_len)+' km',
                 horizontalalignment='center')
 
-        ax1.text(0.03,0.07,'N',horizontalalignment='center',transform=ax1.transAxes)
-        self.txt_y     = self.sc_lat_ed + 3*abs(diff([self.sc_lat_ed,min(ax1.get_ylim())]))
-        ax1.plot(0.03,014,'k^',ms=10,transform=ax1.transAxes)
+        ax1.annotate('N', xy=(.030, .07), xycoords='axes fraction', fontsize=16,  ha='center', va='bottom')
+        ax1.annotate('^', xy=(.031, .09), xycoords='axes fraction', fontsize=22,  ha='center', va='bottom')
 
 
         #_____ Plot events/sta_cor
@@ -2884,15 +2891,15 @@ RESET TEST(91)=0.1
         scl = 1000
         c   = self.ev_rms
         im  = ax1.scatter(self.ev_lon,self.ev_lat,
-                          color=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool)
+                          c=c,marker='.',s=100,edgecolor='black',cmap=plt.cm.cool, vmin=0.0, vmax=self.max_rms)
         ax1.scatter(self.st_lon[0],self.st_lat[0],
-                    s=0.3*scl,marker='+',color='none',linewidth=1,label='+0.3sec')
+                    s=0.3*scl,marker='+',color='none',linewidth=1,label='+%.1fsec'%(self.max_rms))
         ax1.scatter(self.st_lon[self.st_ptc>=0],self.st_lat[self.st_ptc>=0],
-                    s=abs(self.st_ptc[self.st_ptc>=0]*scl),marker='+',color='red',linewidth=1)
+                    s=abs(self.st_ptc[self.st_ptc>=0]*scl),marker='+',color='blue',linewidth=1)
         ax1.scatter(self.st_lon[0],self.st_lat[0],
-                    s=0.3*scl,marker='o',color='none',linewidth=1,label='-0.3sec')
+                    s=0.3*scl,marker='o',color='none',linewidth=1,label='-%.1fsec'%(self.max_rms))
         ax1.scatter(self.st_lon[self.st_ptc<0] ,self.st_lat[self.st_ptc<0],
-                    s=abs(self.st_ptc[self.st_ptc<0]*scl),marker='o',facecolors='none' ,linewidth=1,edgecolor='blue')
+                    s=abs(self.st_ptc[self.st_ptc<0]*scl),marker='o',facecolors='none' ,linewidth=1,edgecolor='red')
 
         for x,y,t in zip (self.st_lon,self.st_lat,self.st_cod):
 
@@ -2903,138 +2910,197 @@ RESET TEST(91)=0.1
         plt.grid()
         ax1.set_xlim(self.lon_min,self.lon_max)
         ax1.set_ylim(self.lat_min,self.lat_max)
-        ax1.locator_params(axis='x',nbins=6)
-        ax1.locator_params(axis='y',nbins=6)
+        ax1.locator_params(axis='x',nbins=5)
+        ax1.locator_params(axis='y',nbins=5)
         leg = ax1.legend(loc=4)
         legend = ax1.get_legend()
         legend.legendHandles[0].set_color('red')
         legend.legendHandles[1].set_edgecolor('blue')
-        cb           = plt.colorbar(im,ax=ax1, label='RMS [second]')
+        divider      = make_axes_locatable(ax1)
+        cax          = divider.append_axes("right", size="2%", pad=0.05)
+        cb           = plt.colorbar(im, ax=ax1, cax=cax, label='RMS [second]')
         tick_locator = ticker.MaxNLocator(nbins=6)
         cb.locator   = tick_locator
         cb.update_ticks()
 
 
-
         self.ini_lon = []
         self.ini_lat = []
+        self.ini_dep = []
         self.ini_rms = []
         self.ini_erh = []
         self.ini_erz = []
         self.fin_lon = []
         self.fin_lat = []
+        self.fin_dep = []
         self.fin_rms = []
         self.fin_erh = []
         self.fin_erz = []
 
-        for _ in self.ini:
+        for i in sorted(self.ini):
 
-            self.ini_lon.append(self.ini[_]['evlon'])
-            self.ini_lat.append(self.ini[_]['evlat'])
-            self.ini_rms.append(self.ini[_]['evrms'])
-            self.ini_erh.append(self.ini[_]['everh'])
-            self.ini_erz.append(self.ini[_]['everz'])
+            i_lon = self.ini[i]['evlon']
+            i_lat = self.ini[i]['evlat'] 
 
-        for _ in self.fin:
+            for f in sorted(self.fin):
 
-            self.fin_lon.append(self.fin[_]['evlon'])
-            self.fin_lat.append(self.fin[_]['evlat'])
-            self.fin_rms.append(self.fin[_]['evrms'])
-            self.fin_erh.append(self.fin[_]['everh'])
-            self.fin_erz.append(self.fin[_]['everz'])
+                f_lon  = self.fin[f]['evlon']
+                f_lat  = self.fin[f]['evlat']
+                dx     = f_lon - i_lon
+                dy     = f_lat - i_lat
+                diff_h = sqrt(dx**2 + dy**2)
+                
+                diff_ot = i-f
+                diff_ot = abs(diff_ot.total_seconds())
+                
+
+                if diff_ot <= self.max_tdf and diff_h <= self.max_ldf:
+
+                    self.ini_lon.append(self.ini[i]['evlon'])
+                    self.ini_lat.append(self.ini[i]['evlat'])
+                    self.ini_dep.append(self.ini[i]['evdep'])
+                    self.ini_rms.append(self.ini[i]['evrms'])
+                    self.ini_erh.append(self.ini[i]['everh'])
+                    self.ini_erz.append(self.ini[i]['everz'])
+
+                    self.fin_lon.append(self.fin[f]['evlon'])
+                    self.fin_lat.append(self.fin[f]['evlat'])
+                    self.fin_dep.append(self.fin[f]['evdep'])
+                    self.fin_rms.append(self.fin[f]['evrms'])
+                    self.fin_erh.append(self.fin[f]['everh'])
+                    self.fin_erz.append(self.fin[f]['everz'])
+
+                    break
+
 
         self.ini_lon = array(self.ini_lon)
         self.ini_lat = array(self.ini_lat)
+        self.ini_dep = array(self.ini_dep)
         self.ini_rms = array(self.ini_rms)
         self.ini_erh = array(self.ini_erh)
         self.ini_erz = array(self.ini_erz)
         self.fin_lon = array(self.fin_lon)
         self.fin_lat = array(self.fin_lat)
+        self.fin_dep = array(self.fin_dep)
         self.fin_rms = array(self.fin_rms)
         self.fin_erh = array(self.fin_erh)
         self.fin_erz = array(self.fin_erz)
-        
 
-        ax2 = plt.axes([0.60, 0.65, .37, .3])
+        
+        # Plot Latitude Dislocation
+        
+        ax2 = plt.axes([0.60, 0.70, .37, .25])
 
         for (y,yy) in zip(self.ini_lat,self.fin_lat):
             if yy-y>0:
-                ax2.plot([y,y],[yy-y,0],'r-o',markevery=self.ini_lat.size)
+                ax2.plot([y,y],[d2k(yy-y),0],'r-o',markevery=self.ini_lat.size)
             else:
-                ax2.plot([y,y],[yy-y,0],'b-o',markevery=self.ini_lat.size)
+                ax2.plot([y,y],[d2k(yy-y),0],'b-o',markevery=self.ini_lat.size)
         ax2.set_xlabel('Latitude [deg]')
         ax2.set_ylabel('Dislocation [km]')
         ax2.set_ylim(-max([abs(_) for _ in ax2.get_ylim()]),max([abs(_) for _ in ax2.get_ylim()]))
+        ax2.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         xlim=ax2.get_xlim()
         ax2.plot(xlim,[0,0], linewidth=2, color = 'k')
         ax2.set_xlim(xlim)
-        ax2.locator_params(axis='x',nbins=6)
-        ax2.locator_params(axis='y',nbins=6)
+        ax2.locator_params(axis='x',nbins=5)
+        ax2.locator_params(axis='y',nbins=5)
         plt.grid()
 
-
-        ax3 = plt.axes([0.60, 0.25, .37, .3])
+        # Plot Longitude Dislocation
+        
+        ax3 = plt.axes([0.60, 0.38, .37, .25])
         
         for (x,xx) in zip(self.ini_lon,self.fin_lon):
             
             if xx-x>0:
-                ax3.plot([x,x],[xx-x,0],'r-o',markevery=self.ini_lon.size)
+                ax3.plot([x,x],[d2k(xx-x),0],'r-o',markevery=self.ini_lon.size)
             else:
-                ax3.plot([x,x],[xx-x,0],'b-o',markevery=self.ini_lon.size)
+                ax3.plot([x,x],[d2k(xx-x),0],'b-o',markevery=self.ini_lon.size)
                 
         ax3.set_xlabel('Longitude [deg]')
         ax3.set_ylabel('Dislocation [km]')
         ax3.set_ylim(-max([abs(_) for _ in ax3.get_ylim()]),max([abs(_) for _ in ax3.get_ylim()]))
+        ax3.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         xlim=ax3.get_xlim()
         ax3.plot(xlim,[0,0], linewidth=2, color = 'k')
         ax3.set_xlim(xlim)
-        ax3.locator_params(axis='x',nbins=6)
-        ax3.locator_params(axis='y',nbins=6)
+        ax3.locator_params(axis='x',nbins=5)
+        ax3.locator_params(axis='y',nbins=5)
         plt.grid()
 
-
-        ax4 = plt.axes([0.05, 0.06, .14, .3])
-        bns = arange(0, 15 + 1, 1)
-        ax4.hist(self.ini_erh,color='r',label='Initial',alpha=.65,bins=bns)
-        ax4.hist(self.fin_erh,color='b',label='Final',alpha=.65,bins=bns)
-        ax4.set_xlabel('H_Error [km]')
-        ax4.set_ylabel('Event [#]')
-        ax4.set_xlim(0,self.max_her)
-        ax4.locator_params(axis='x',nbins=6)
-        ax4.locator_params(axis='y',nbins=6)
-        plt.grid()
-        ax4.legend(loc=1,fontsize=9)
-
-        ax5 = plt.axes([0.23, 0.06, .14, .3])
-        bns = arange(0, 20 + 1, 1)
-        ax5.hist(self.ini_erz,color='r',label='Initial',alpha=.65,bins=bns)
-        ax5.hist(self.fin_erz,color='b',label='Final',alpha=.65,bins=bns)
-        ax5.set_xlabel('Z_Error [km]')
-        ax5.set_xlim(0,self.max_der)
-        ax5.locator_params(axis='x',nbins=6)
-        ax5.locator_params(axis='y',nbins=6)
-        plt.grid()
-        ax5.legend(loc=1,fontsize=9)
-
+        # Plot Depth Dislocation
         
-        ax6 = plt.axes([0.41, 0.06, .14, .3])
-        bns = arange(0, 0.5 + 0.05, 0.05)
-        ax6.hist(self.ini_rms,color='r',label='Initial',alpha=.65,bins=bns)
-        ax6.hist(self.fin_rms,color='b',label='Final',alpha=.65,bins=bns)
-        ax6.set_xlabel('RMS [sec]')
-        ax6.set_xlim(0,self.max_rms)
-        ax6.locator_params(axis='x',nbins=6)
-        ax6.locator_params(axis='y',nbins=6)
+        ax4 = plt.axes([0.60, 0.06, .37, .25])
+        
+        for (x,xx) in zip(self.ini_dep,self.fin_dep):
+            
+            if xx-x>0:
+                ax4.plot([x,x],[xx-x,0],'r-o',markevery=self.ini_dep.size)
+            else:
+                ax4.plot([x,x],[xx-x,0],'b-o',markevery=self.ini_dep.size)
+                
+        ax4.set_xlabel('Depth [km]')
+        ax4.set_ylabel('Dislocation [km]')
+        ax4.set_ylim(-max([abs(_) for _ in ax4.get_ylim()]),max([abs(_) for _ in ax4.get_ylim()]))
+        ax4.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        ax4.plot([0,self.dep_max],[0,0], linewidth=2, color = 'k')
+        ax4.set_xlim(0,self.dep_max)
+        ax4.locator_params(axis='x',nbins=5)
+        ax4.locator_params(axis='y',nbins=5)
         plt.grid()
-        ax6.legend(loc=1,fontsize=9)
+        
+        # Plot Horizontal Error
+        
+        ax5 = plt.axes([0.05, 0.06, .14, .3])
+        bns = arange(0, self.max_her + 1, self.bin_her)
+        ax5.hist(self.ini_erh,color='r',label='Initial',alpha=.65,bins=bns)
+        ax5.hist(self.fin_erh,color='b',label='Final',alpha=.60,bins=bns)
+        ax5.set_xlabel('H_Error [km]')
+        ax5.set_ylabel('Event [#]')
+        ax5.set_xlim(0,self.max_her)
+        ax5.locator_params(axis='x',nbins=5)
+        ax5.locator_params(axis='y',nbins=5)
+        plt.grid()
+        ax5.legend(loc=1,fontsize=plt.rcParams['font.size'])
+
+        # Plot Depth Error
+        
+        ax6 = plt.axes([0.23, 0.06, .14, .3])
+        bns = arange(0, self.max_der + 1, self.bin_der)
+        ax6.hist(self.ini_erz,color='r',label='Initial',alpha=.65,bins=bns)
+        ax6.hist(self.fin_erz,color='b',label='Final',alpha=.60,bins=bns)
+        ax6.set_xlabel('Z_Error [km]')
+        ax6.set_xlim(0,self.max_der)
+        ax6.locator_params(axis='x',nbins=5)
+        ax6.locator_params(axis='y',nbins=5)
+        plt.grid()
+        ax6.legend(loc=1,fontsize=plt.rcParams['font.size'])
+
+        # Plot RMS
+        
+        ax7 = plt.axes([0.41, 0.06, .14, .3])
+        bns = arange(0, self.max_rms + self.max_rms/20.0, self.max_rms/20.0)
+        ax7.hist(self.ini_rms,color='r',label='Initial',alpha=.65,bins=bns)
+        ax7.hist(self.fin_rms,color='b',label='Final',alpha=.60,bins=bns)
+        ax7.set_xlabel('RMS [sec]')
+        ax7.set_xlim(0,self.max_rms)
+        ax7.locator_params(axis='x',nbins=5)
+        ax7.locator_params(axis='y',nbins=5)
+        plt.grid()
+        ax7.legend(loc=1,fontsize=plt.rcParams['font.size'])
 
         plt.savefig(os.path.join('figs',self.project_nm,'final_'+self.project_nm))
+        plt.close()
 
         remove('velest.cmn')
         
         print "+++ Finito!"
 
 #___________________ RUN
+
+import warnings
+warnings.filterwarnings("ignore")
 
 start = main()
 start.extract_topo()
