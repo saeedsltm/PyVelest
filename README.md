@@ -54,6 +54,8 @@ Processing:
        "python PyVpVs.py" in terminal and give the NORDIC input file name. It generate a figure called "VpVs_x.tiff" which
         "x" is the Vp/Vs ratio. This module calculats the ratio aftre removing outliers from your dataset.
 
+![vpvs_1 73](https://user-images.githubusercontent.com/20725501/32775531-ef81b150-c92f-11e7-8c57-eb3e0ed4644f.png)
+
     4- Generate VELEST input file automatically. Using the module "PyVelestInp.py" it creates all input files required by 
        VELEST program. Type "python PyVelestInp.py" and give the NORDIC input file name. it generates the "velinp" folder
        in root, and phase data in CNV format "data.cnv", velocity model "initial.mod" and station file "station.sta". the
@@ -89,10 +91,19 @@ Processing:
        o) velest_analytics_initial.tiff : Figure indicating VELEST analyzing in each iteration step.
        p) velest_final_initial.tiff : Figure indicating final results of VELEST outputs.
 
+![data_initial](https://user-images.githubusercontent.com/20725501/32776365-9c1862cc-c932-11e7-9c91-6ee7a54597c1.png)
+![path_initial](https://user-images.githubusercontent.com/20725501/32776414-c6656110-c932-11e7-948e-c9ac23852f93.png)
+![synt_models_initial](https://user-images.githubusercontent.com/20725501/32776450-e123ddc4-c932-11e7-946c-9c8a0f7a973d.png)
+![velest_analytics_initial](https://user-images.githubusercontent.com/20725501/32776491-045c8bb0-c933-11e7-976c-da98c55be26f.png)
+![final_initial](https://user-images.githubusercontent.com/20725501/32776530-24740e28-c933-11e7-90cf-fae4da8bdcc9.png)
+
     8- After you finish with the "PyVelest.py" code, it's time to check the stability of the model and make some comparison
        between calculated models. In some cases you may also to know about the best  damping  values. To do these, there is
        "PyCheck.py" module in root directory. Running this code is similar to "PyVelest.py"  so  you will be asked in each
        step. The output figures of running this code, will be saved inside "Check-Test" folder and its subdirectories.
+
+![velocity_damping_test](https://user-images.githubusercontent.com/20725501/32776663-94e9c742-c933-11e7-91bb-b2e715859003.png)
+![stabilitytest](https://user-images.githubusercontent.com/20725501/32776683-a40d6332-c933-11e7-8ab5-6de31bce9fa7.png)
 
 The Code; Files and Folders:
 
