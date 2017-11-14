@@ -42,6 +42,8 @@ Processing:
        The input parameters file are self-explanatory. Then (here for 2D case) type "python PySelect2D.py"  and  give the 
        input NORDIC file name. Check if the output file "select.out" is created.
 
+![select3d](https://user-images.githubusercontent.com/20725501/32775311-5eac46c2-c92f-11e7-9b5f-d0a2e283129a.png)
+
     2- Check which station could be removed. If number of recorded phases in any station is less than let say 10, and it
        shows high RMS, i recommend to remove that station from your station list "STATION0.HYP". To check if there is any
        such a station, type "python PyNordicStat.py" and give the NORDIC input file name. It generate a report file called
