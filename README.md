@@ -12,15 +12,15 @@ Requirements:
 
 Non-Pythonic program:
 
-    - SEISAN, (http://seisan.info/)
+- SEISAN, (http://seisan.info/)
 
 Pythonic programs:
 
-    - Numpy, (http://www.numpy.org/)
-    - Scipy, (https://www.scipy.org/)
-    - Matplotlib, (https://matplotlib.org/)
-    - Statsmodels, (http://www.statsmodels.org/stable/index.html)
-    - LatLon (https://pypi.python.org/pypi/LatLon)
+- Numpy, (http://www.numpy.org/)
+- Scipy, (https://www.scipy.org/)
+- Matplotlib, (https://matplotlib.org/)
+- Statsmodels, (http://www.statsmodels.org/stable/index.html)
+- LatLon (https://pypi.python.org/pypi/LatLon)
 
 Input files:
 
