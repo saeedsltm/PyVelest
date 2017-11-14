@@ -1095,9 +1095,9 @@ class main():
             #____ Labels = [left,right,top,bottom]
 
             parallels = linspace(self.lat_min,self.lat_max,5)
-            self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
+            self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0, fontsize=6)
             meridians = linspace(self.lon_min,self.lon_max,5)
-            self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0)
+            self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0, fontsize=6)
 
             #____ Scale & North sing
 
@@ -1400,8 +1400,8 @@ class main():
 
         # plot-No 1, velocity model
 
-        init_plotting_isi(18,15)
-        plt.rcParams['axes.labelsize'] = 9
+        init_plotting_isi(18,10)
+        plt.rcParams['axes.labelsize'] = 7.5
 
         ax1 = plt.subplot(2,2,1)
         ax1.plot(vel,dep,color='black',linewidth=1.5,label='Refrence')
@@ -1450,8 +1450,8 @@ class main():
         parallels = linspace(self.lat_min,self.lat_max,5)
         meridians = linspace(self.lon_min,self.lon_max,5)
 
-        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
-        self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0)
+        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0, fontsize=6)
+        self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0, fontsize=6)
 
         #____ Scale & North sing
 
@@ -1482,9 +1482,9 @@ class main():
         fs     = 0.8*plt.rcParams['font.size']
         c      = evrms
         
-        im  = ax2.scatter(evlon,evlat,c=c,marker='.',s=75,linewidth=None,edgecolor='black',cmap=plt.cm.jet, vmin=0.0, vmax=self.max_rms)
-        ax2.scatter(stlon,stlat, s=75, marker='^', edgecolor='k', linewidth=2, facecolor='gray')
-        ax2.scatter(stlon[refid],stlat[refid], s=75, marker='^', edgecolor='gray', linewidth=2, facecolor='k',label='Reference')
+        im  = ax2.scatter(evlon,evlat,c=c,marker='.',s=50,linewidth=None,edgecolor='black',cmap=plt.cm.jet, vmin=0.0, vmax=self.max_rms)
+        ax2.plot(stlon,stlat, marker='^', ms=5, mec='k', mew=1.5, mfc='gray', ls='')
+        ax2.plot(stlon[refid],stlat[refid], marker='^', ms=5, mec='gray', mew=1.5, mfc='k', ls='',label='Reference')
        
         for x,y,t in zip (stlon,stlat,stnm):
 
@@ -2327,9 +2327,9 @@ RESET TEST(91)=0.1
         #____ Labels = [left,right,top,bottom]
 
         parallels = linspace(self.lat_min,self.lat_max,5)
-        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
+        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0, fontsize=6)
         meridians = linspace(self.lon_min,self.lon_max,5)
-        self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0)
+        self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0, fontsize=6)
 
         #____ Scale & North sing
 
@@ -2356,7 +2356,7 @@ RESET TEST(91)=0.1
 
         c   = evrms
         im  = ax.scatter(evlon,evlat,c=c,marker='.',s=75,edgecolor='black',cmap=plt.cm.jet,zorder=4,vmin=0.0, vmax=self.max_rms)
-        ax.scatter(stlon,stlat, s=75, marker='^', edgecolor='k', linewidth=2, facecolor='gray',zorder=5)
+        ax.plot(stlon,stlat, marker='^', ms=5, mec='gray', mew=1.5, mfc='k', ls='',zorder=5)
                 
         ax.grid(True, linestyle='--', linewidth=.5, color='k', alpha=.3)
         ax.locator_params(axis='x',nbins=5)
@@ -2726,9 +2726,9 @@ RESET TEST(91)=0.1
             #____ Labels = [left,right,top,bottom]
 
             parallels = linspace(self.lat_min,self.lat_max,5)
-            self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
+            self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0, fontsize=6)
             self.meridians = linspace(self.lon_min,self.lon_max,5)
-            self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0)
+            self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0, fontsize=6)
 
             #____ Scale & North sing
 
@@ -2862,9 +2862,9 @@ RESET TEST(91)=0.1
         #____ Labels = [left,right,top,bottom]
 
         parallels = linspace(self.lat_min,self.lat_max,5)
-        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0)
+        self.m.drawparallels(parallels,labels=[True,False,False,False],fmt='%4.1f',linewidth=0, fontsize=6)
         meridians = linspace(self.lon_min,self.lon_max,5)
-        self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0)
+        self.m.drawmeridians(meridians,labels=[False,False,False,True],fmt='%4.1f',linewidth=0, fontsize=6)
 
         #____ Scale & North sing
 
