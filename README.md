@@ -1,7 +1,4 @@
-#__________________V1.01
-#
-
-Short manual for How To Run PyVelest/Pycheck and other modules.
+Short manual for "How To Run" PyVelest/Pycheck and other modules.
 
 Requirements:
 
