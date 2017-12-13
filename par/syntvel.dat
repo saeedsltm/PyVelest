@@ -1,0 +1,24 @@
+# VELEST - synthetic model parameter file. 
+# Please set appropriate values to generate
+# random velocity models.  
+#
+#######################################
+#
+vel_mode           : u                 # u: Use uniforn distribution ; n: Use normal distribution.
+dep_mode           : u                 # u: Use uniforn distribution ; n: Use normal distribution.
+vel_min            : 4.0               # Minimum velocity in km/s.
+vel_max            : 7.5               # Maximum velocity in km/s.
+dep_min            : -3.0              # Minimum depth in kilometer.
+dep_max            : 20.0              # Maximum depth in kilometer.
+vel_dev            : 3e-1              # Velocity perurbation. If vel_mode=u, it is the maximum length of deviation - if "n" dev is the STD. 
+dep_dev            : 1e-9              # Depth deviation, same as "vel_dev".
+nmod               : 50                # number of synthetic models.
+vpvs               : 1.72              # Vp/Vs.
+ors                : 3.0               # outlier rejection spread [rejects bad vel models]. use 3 for random and 2 if pre-def initial vel defined.
+positive_grd       : 1                 # generates random model with positive gradient [1] or Not [0].
+bad_evnt_herr      : 5                 # report bad events if horizontal error on the final relocation exceded this value.
+bad_evnt_zerr      : 5                 # report bad events if depth error on the final relocation exceded this value.
+bad_evnt_rms       : 0.5               # report bad events if RMS on the final relocation exceded this value.
+res_max_rw         : 1.0               # divids this value into 5 pairs of (res,w) and re-weight each phase based on it's own resdidual.
+velmod_name        : c55_1.mod           # velocity model file name (look at "velinp" directory).
+#
