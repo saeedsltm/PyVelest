@@ -47,7 +47,7 @@ EVENT_W            = 50           # Percentage of mean of all event's weight def
     
     f.close()
 
-select_par  = genfromtxt('select3D.par', delimiter='=', comments='#', dtype=None)
+select_par  = genfromtxt('select3D.par', delimiter='=', dtype=str)
 
 #___________________SOME USEFULL FUNCTIONS
 
@@ -244,7 +244,10 @@ for evt in data:
 
                 smd.append(data[evt]['PHASE'][_]['P'][__]['DIS'])
 
-    smd = min(smd)
+    try:
+        smd = min(smd)
+    except:
+        continue
 
     # CHECK INITIAL CONDITIONS
 
