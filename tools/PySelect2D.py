@@ -68,7 +68,6 @@ inp_file = raw_input('\nInput NORDIC file name:\n\n')
 event_list     = [[]]
 event_surfed   = 0
 event_bad_hdrE = 0
-event_bad_hdr1 = 0
 event_passed   = 0
 event_nopassed = 0
 event_noloc    = 0
@@ -77,26 +76,16 @@ c              = 0
 
 with open(inp_file) as f:
 
-    flag_correct = True
-    flag_LT1     = True
-
     for l in f:
 
         if not l.strip():
             
             event_list.append([])
-            flag_correct = True
-            flag_LT1     = True
             c+=1
             event_surfed+=1
-           
-        if l.strip() and l[79:80] == '1' and not l[48:51].strip() and flag_LT1:
 
-            flag_LT1     = False
-            flag_correct = False
-            event_noloc+=1
+        if l.strip():
             
-        if l.strip() and flag_correct:
             event_list[c].append(l)
 
 event_list = filter(None,event_list)
@@ -161,22 +150,24 @@ for i in event_list:
     T      = '-'.join([y,m,d])+'T'+':'.join([H,M,S])+F
     ORIGT  = dt.strptime(T,'%Y-%m-%dT%H:%M:%S.%f')
     DIS_ID = i[0][21:22].strip()
-    LON    = float(i[0][24:30])
-    LAT    = float(i[0][32:38])
+    LAT    = float(i[0][24:30])
+    LON    = float(i[0][31:38])
     DEP    = float(i[0][38:43])
     LAGC   = i[0][45:48].strip()
     NOBS   = int(i[0][49:51].strip())
     RMS    = float(i[0][51:55])
     MAG    = float(i[0][55:59] if i[0][55:59].strip() else 0.0)
-    DIST   = [float(l[70:75]) for l in i if l.strip() and l[70:75].strip() and l[79:80] == ' ' or l[79:80] == '4']
-    MIN_D  = min(DIST)
+    DIST   = [float(l[70:75]) for l in i if l.strip() and l[10].upper()=="P" and l[70:75].strip() and l[79:80] == ' ' or l[79:80] == '4']
+    try:
+        MIN_D  = min(DIST)
+    except: continue
     MN_D   = mean(DIST)
     FOC    = [l[70:76].strip() for l in i if l[79:80] == 'F']
-    GAP    = [float(l[5:8]) for l in i if l[60:74] == 'E']
-    OTER   = [float(l[14:20]) for l in i if l[60:74] == 'E']
-    LATER  = [float(l[24:30]) for l in i if l[60:74] == 'E']
-    LONER  = [float(l[32:38]) for l in i if l[60:74] == 'E']
-    DEPER  = [float(l[38:43]) for l in i if l[60:74] == 'E']
+    GAP    = [float(l[5:8]) for l in i if l[79:80] == 'E']
+    OTER   = [float(l[14:20]) for l in i if l[79:80] == 'E']
+    LATER  = [float(l[24:30]) for l in i if l[79:80] == 'E']
+    LONER  = [float(l[32:38]) for l in i if l[79:80] == 'E']
+    DEPER  = [float(l[38:43]) for l in i if l[79:80] == 'E']
     POL    = [l[16:17].strip() for l in i if l.strip() and l[79:80] == ' ' or l[79:80] == '4']
 
     STRT  = dt.strptime(select_dict['START_TIME'],'%Y-%m-%dT%H:%M:%S')
@@ -284,6 +275,7 @@ for i in event_list:
     chk_MIN_DIS  =  bool(MIN_D <= MIND)
     chk_MEAN_DIS =  bool(MN_D <= MND)
 
+
     chk_POL  = bool(MIPO <= num_pol)
     chk_list = [chk_OT, chk_MA, chk_LA,
                 chk_LO, chk_HE, chk_DP,
@@ -312,9 +304,7 @@ select_out.close()
 #___________________ Print log
 print ''
 print 'Total number of event(s)                                :  ',event_surfed
-print 'Total number of event(s) with bad header in line type 1 :  ',event_bad_hdr1
 print 'Total number of event(s) with bad header in line type E :  ',event_bad_hdrE
 print 'Total number of event(s) passed all conditions          :  ',event_passed
 print 'Total number of event(s) NOT passed all conditions      :  ',event_nopassed
-print 'Total number of event(s) with no location reported!     :  ',event_noloc
 print 'Total number of event(s) with no magnitude reported!    :  ',event_nomag
