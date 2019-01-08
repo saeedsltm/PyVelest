@@ -8,7 +8,7 @@ import tarfile
 import operator
 import sys
 import glob
-from os import system, remove, path, getcwd, chdir, mkdir, makedirs, sep
+from os import system, remove, path, getcwd, chdir, mkdir, makedirs, sep, getcwd
 from datetime import datetime as dt
 sys.path.append(path.join('tools','utility'))
 from PyNordicRW import Read_Nordic
@@ -1809,11 +1809,11 @@ class main():
                     sta_lat = ll.Latitude(float(l[4:11]))
                     sta_lat = '%02d%05.2f%1s'%(sta_lat.degree,sta_lat.decimal_minute,sta_lat.get_hemisphere())
                     sta_lon = ll.Longitude(float(l[13:21]))
-                    sta_lon = '%02d%05.2f%1s'%(sta_lon.degree,sta_lon.decimal_minute,sta_lon.get_hemisphere())
+                    sta_lon = '%03d%05.2f%1s'%(sta_lon.degree,sta_lon.decimal_minute,sta_lon.get_hemisphere())
                     sta_elv = l[23:27]
                     sta_pt  = l[33:40]
                     sta_st  = l[41:46]
-                    name = '  '+sta_n+sta_lat+' '+sta_lon+sta_elv
+                    name = '  '+sta_n+sta_lat+sta_lon+sta_elv
                     sta_cor.append(name)
 
 
@@ -2065,9 +2065,9 @@ RESET TEST(91)=0.1
 
                     bad_events.append(l)
 
-        remove('gmap.cur.kml')
-        remove('hypmag.out')
-        remove('hyp.par')
+        for _ in ['gmap.cur.kml', 'hypmag.out', 'hyp.par']:
+
+            if path.exists(_): remove(_)
 
         chdir(here)
 
@@ -2806,6 +2806,7 @@ RESET TEST(91)=0.1
         for s in self.sta_cor:
 
             n = s.strip()
+
             self.st_cod.append(n)
             self.st_lat.append(float(self.sta_list[n]['lat']))
             self.st_lon.append(float(self.sta_list[n]['lon']))
