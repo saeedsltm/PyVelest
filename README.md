@@ -7,7 +7,7 @@ Requirements:
 *** It assumed that you are familiar with the VELEST program already, knowing how it works, how to run it and how to 
         interpret its results. Otherwise this code is not what you're looking for. 
 
-*** Before using the code, please be sure that the following programs are already installed, on your Linux system (-
+*** Before using the code, please be sure that the following programs are already installed on your Linux system (-
         tested on Ubuntu 16.04).
 
 Non-Pythonic program:
