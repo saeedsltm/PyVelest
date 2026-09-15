@@ -1,0 +1,72 @@
+INPUTS:
+  catalog: inputs/sample.out
+  stations: inputs/stations.csv
+  vmodel: inputs/vmodel.dat
+  
+STUDY_AREA:
+  min_lat: 37.50
+  max_lat: 39.00
+  min_lon: 46.00
+  max_lon: 47.50
+  lat_hemisphere: N
+  lon_hemisphere: E
+  
+EVENT_SELECTION:
+  max_events: 500
+  cell_count_lat: 8
+  cell_count_lon: 8
+  cell_count_depth: 8
+  max_horizontal_error_km: 1.0
+  max_depth_error_km: 1.0
+  max_rms_sec: 0.1
+  max_gap_deg: 100
+  min_used_stations: 12
+
+REFERENCE_STATION:
+  phase_count_weight: 0.45
+  residual_weight: 0.35
+  distance_weight: 0.20
+
+SYNTHETIC_MODELS:
+  n_models: 50
+  velocity_std: 0.1
+  depth_std: 0.5
+  seed: 1
+  merging_threshold_km_s: 0.15
+
+STAGE_01:
+  n_runs: 5
+
+STAGE_02:
+  n_runs: 5
+
+STAGE_03:
+  n_runs: 5
+  n_models: 25
+  
+STAGE_04:
+  n_runs: 5
+  dx_km: 10.0
+  dy_km: 10.0
+  dz_km: 10.0
+  seed: 1
+    
+REPORT_SETTINGS:
+  report_on: false
+
+FIGURE_SETTINGS:
+  # Seismicity map
+  min_sei_lat: 37.50
+  max_sei_lat: 39.00
+  min_sei_lon: 46.00
+  max_sei_lon: 47.50
+  min_sei_depth: 0.0
+  max_sei_depth: 20.0  
+  # Velocity maps
+  min_vel_vp: 4.0
+  max_vel_vp: 8.5
+  min_vel_depth: 0.0
+  max_vel_depth: 45.0
+
+GLOBAL_SETTINGS:
+  clean_workspace: false

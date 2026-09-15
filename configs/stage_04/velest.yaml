@@ -1,0 +1,327 @@
+###############################################################################
+# VELEST configuration file
+# Note: Any unspecified values will be determined automatically during the
+#       processing stage. Parameters marked with * are mandatory.
+###############################################################################
+
+###############################################################################
+# Project description (line 1)
+###############################################################################
+
+TITLE: "VELEST Inversion Configuration Parameters"
+
+###############################################################################
+# Coordinate system (line 2)
+###############################################################################
+
+COORDINATE_SYSTEM:
+
+  # * Latitude of local Cartesian origin (decimal degrees)
+  origin_latitude: 38.25
+
+  # * Longitude of local Cartesian origin (decimal degrees)
+  origin_longitude: -46.75
+
+  # * Coordinate system
+  # 0 = local Cartesian (short-distance conversion)
+  # 2 = Swiss coordinate system
+  system: 0
+
+  # * Vertical shift applied to all station elevations (km)
+  elevation_shift: 0.0
+
+  # * Trial hypocenter option
+  # 0 = use hypocenter from input catalog
+  # 1 = estimate epicenter from first arrival
+  trial_mode: 0
+
+  # * Trial depth (km)
+  trial_depth: 10.0
+
+  # * Input phase format
+  # 0 = CNV
+  # 1 = ARCVEL
+  # 2 = SED
+  input_format: 0
+
+###############################################################################
+# Dataset (line 3)
+###############################################################################
+
+DATASET:
+
+  # Number of earthquakes
+  number_of_earthquakes:
+
+  # Number of shots
+  number_of_shots: 0
+
+  # Clockwise rotation of local coordinate system (degrees)
+  rotation: 0.0
+
+###############################################################################
+# Inversion mode (line 4)
+###############################################################################
+
+INVERSION:
+
+  # * 0 = simultaneous inversion
+  # * 1 = single-event location
+  single_event: false
+
+  # * Calculate resolution matrices
+  resolution_matrix: false
+
+###############################################################################
+# Model options (line 5)
+###############################################################################
+
+RELOCATION:
+
+  # * Maximum epicentral distance (km)
+  maximum_distance: 500.0
+
+  # * Apply topography correction
+  topography: false
+
+  # * Minimum allowed depth (km)
+  minimum_depth: 0.0
+
+  # * Velocity adjustment factor
+  velocity_adjustment: 0.2
+
+  # * Depth adjustment factor
+  depth_adjustment: 2.0
+
+  # * Allow low-velocity layers
+  allow_low_velocity_layers: false
+
+###############################################################################
+# Velocity model (line 6)
+###############################################################################
+
+VELOCITY:
+
+  # * 1 = P only
+  # * 2 = independent P and S models
+  # * 3 = S derived using VP/VS
+  phase_mode: 1
+
+  # * S-wave weighting factor
+  s_weight_factor: 1.0
+
+  # * VP / VS ratio
+  vp_vs_ratio: 1.75
+
+  # * Number of velocity models
+  number_of_models: 1
+
+###############################################################################
+# Damping (line 7)
+###############################################################################
+
+DAMPING:
+
+  # * Origin time damping
+  origin_time: 0.01
+
+  # * Epicenter damping
+  hypocenter_xy: 0.01
+
+  # * Depth damping
+  hypocenter_depth: 0.01
+
+  # * Velocity damping
+  velocity: 1.0
+
+  # * Station correction damping
+  station_correction: 0.1
+
+###############################################################################
+# Station corrections (line 8)
+###############################################################################
+
+STATION_CORRECTION:
+
+  # * Invert station corrections
+  invert_station_corrections: true
+
+  # * Apply shot corrections
+  shot_corrections: false
+
+  # * Keep shot corrections fixed
+  fix_shot_corrections: false
+
+  # * Use station elevations
+  use_station_elevation: true
+
+  # * Read station corrections from station file
+  use_station_corrections: true
+
+###############################################################################
+#  
+###############################################################################
+
+OUTPUT_SWITCH:
+
+  # * Speed up calculations by reducing some processing/output
+  turbo_mode: false
+
+  # * Writes the converted earthquake/phase data in CNV format as output
+  write_cnv: true
+
+  # * Controls output related to the station information/corrections.
+  write_station_file: true
+
+  # * Controls additional output associated with the single-event / summary processing
+  write_summary_cards: true
+
+###############################################################################
+# Diagnostic output (line 10)
+###############################################################################
+
+DIAGNOSTIC:
+
+  # * Write ray paths
+  raypaths: false
+
+  # * Write travel-time derivatives, particularly useful for understanding the inversion matrix
+  derivatives: false
+
+  # * Write ALE values, the average location errors
+  ale: false
+
+  # * Write DSPR values, the spatial resolution/parameter spread
+  dirichlet_spread: false
+
+  # * Write reflected-ray residual data
+  reflection_points: false
+
+  # * Write refracted-ray residual data
+  refraction_points: false
+
+  # * Write distance(km)-residual(s) data
+  residuals: true
+
+###############################################################################
+# Iteration control (line 11)
+###############################################################################
+
+ITERATION:
+
+  # * Cntrols one of VELEST's convergence/termination criteria
+  minimum_rms_change: 0.001
+
+  # * Maximum number of iterations
+  maximum_iterations: 8
+
+  # * How often velocity/station corrections are inverted
+  invert_ratio_every: 2
+
+###############################################################################
+# Observation quality classes (line 12)
+###############################################################################
+
+QUALITY_CLASS:
+
+  # * 0 = use weights from CNV file
+  # * 1 = redefine weights below
+  mode: 0
+
+  class0: 0
+  class1: 1
+  class2: 2
+  class3: 3
+  class4: 4
+  class5: 4
+
+###############################################################################
+# Observation weight factors (line 13)
+###############################################################################
+
+QUALITY_FACTOR:
+
+  # * 0 = HYPO71 defaults
+  # * 1 = use factors below
+  mode: 0
+
+  class0: 1.00
+  class1: 0.50
+  class2: 0.25
+  class3: 0.125
+  class4: 0.00
+
+###############################################################################
+# Input files (lines 14-22)
+###############################################################################
+
+INPUT_FILE:
+
+  # * Initial 1-D velocity model 
+  velocity_model:
+
+  # * Station coordinates, elevation, model/ICC, station corrections
+  stations:
+
+  # * Seismometer/site information
+  seismo: ""
+
+  # * Names/definitions of geographic regions
+  region_names: "sup/regionsnamen.dat"
+
+  # * Coordinates defining those regions
+  region_coordinates: "sup/regionskoord.dat"
+
+  # * Topographic/bathymetric surface information
+  topography_primary: ""
+
+  # * Additional topographic information
+  topography_secondary: ""
+
+  # * Earthquake phase observations
+  earthquakes:
+
+  # * Shot/blast data
+  shots: ""
+
+###############################################################################
+# Output files (lines 23-34)
+###############################################################################
+
+OUTPUT_FILE:
+
+  # * Main VELEST output
+  main_output: 
+
+  # * Updated earthquake/phase data in CNV format only in single-event mode
+  single_event_locations: ""
+
+  # * Updated earthquake/phase data in CNV format
+  cnv_output: 
+
+  # * Updated station information/corrections
+  station_output:
+
+  # * Single-event output
+  summary_output:
+
+  # * Ray-path output
+  ray_output:
+
+  # * Derivative/partial-derivative output
+  derivative_output: ""
+
+  # * ALE output
+  averaging_kernel_output: ""
+
+  # * DSPR output
+  dirichlet_output: ""
+
+  # * Reflected-ray output
+  reflection_output: ""
+
+  # * Refracted-ray output
+  refraction_output: ""
+
+  # * Residual output
+  residual_output:
