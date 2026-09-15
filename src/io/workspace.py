@@ -12,6 +12,7 @@ def prepare_workspace(config):
         "stage_03",
         "stage_04",
         "stage_05",
+        "stage_fn",
     ]:
 
         target = Path("outputs") / directory

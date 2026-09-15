@@ -80,23 +80,23 @@ class Main:
             plot_dislocations(self.config, stage_n=4, run_n=n)
 
     def stage_05(self):
-        # prepare_station(self.config, stage_n=5)
-        # prepare_model(self.config, stage_n=5)
-        # prepare_catalog(self.config, self.catalog, stage_n=5)
-        # prepare_cmn(self.config, stage_n=5)
-        # run_velest(self.config, stage_n=5)   
+        prepare_station(self.config, stage_n=5)
+        prepare_model(self.config, stage_n=5)
+        prepare_catalog(self.config, self.catalog, stage_n=5)
+        prepare_cmn(self.config, stage_n=5)
+        run_velest(self.config, stage_n=5)   
         reselect_best(self.config, stage_n=5)
-        # prepare_final_model(self.config)
-        # prepare_final_catalog(self.config)
-        # prepare_final_stations(self.config)
+        prepare_final_model(self.config)
+        prepare_final_catalog(self.config)
+        prepare_final_stations(self.config)
 
 
 if __name__ == "__main__":
     config = Path("configs") / "user.yaml"
     app = Main(config.as_posix())
-    # app.load_catalog()
-    # app.stage_01()
-    # app.stage_02()
-    # app.stage_03()
-    # app.stage_04()
+    app.load_catalog()
+    app.stage_01()
+    app.stage_02()
+    app.stage_03()
+    app.stage_04()
     app.stage_05()
