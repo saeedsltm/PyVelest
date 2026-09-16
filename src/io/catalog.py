@@ -27,6 +27,9 @@ from datetime import datetime as dt
 from math import sqrt
 from numpy import nan, random
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 def get_picks_info(event, eid, station_inpfile=Path("inputs/stations.csv")):
     """Extract VELEST-ready pick rows from one ObsPy event.
@@ -106,8 +109,12 @@ def summarize_catalog(config):
         gap = po.quality.azimuthal_gap or None
         rms = po.quality.standard_error or None
         nst = po.quality.used_station_count or None
-        erh = po.origin_uncertainty.horizontal_uncertainty or None
-        erz = po.depth_errors.uncertainty * 1e-3 or None
+        erh = (
+            po.origin_uncertainty.horizontal_uncertainty
+            if po.origin_uncertainty
+            else None
+        )
+        erz = po.depth_errors.uncertainty * 1e-3 if po.depth_errors else None
         event_info = {
             "eid": eid,
             "ort": ort,
@@ -175,7 +182,7 @@ def make_origin(origin_data):
         time=origin_data["time"],
         latitude=origin_data["latitude"],
         longitude=origin_data["longitude"],
-        depth=(origin_data["depth_km"] * 1000.0),
+        depth=(origin_data["depth_km"] * 1000.0 if origin_data["depth_km"] else None),
     )
     return origin
 
@@ -194,16 +201,25 @@ def make_catalog(events_df):
     for eid, event_df in events_df.groupby(["eid"]):
 
         event_info = event_df.iloc[-1]
-
-        origin_data = {
-            "time": utc(event_info.ort),
-            "latitude": event_info.lat,
-            "longitude": event_info.lon,
-            "depth_km": event_info.dep,
-            "magnitude": event_info.mag,
-        }
-
         event = Event()
+       
+        if not event_info.ort:
+            origin_data = {
+                "time": utc(1900,1,1),
+                "latitude": 0,
+                "longitude": 0,
+                "depth_km": 0,
+                "magnitude": 0,
+                }
+        else:
+            origin_data = {
+                "time": utc(event_info.ort),
+                "latitude": event_info.lat,
+                "longitude": event_info.lon,
+                "depth_km": event_info.dep,
+                "magnitude": event_info.mag,
+                }            
+        
         origin = make_origin(origin_data)
         event.origins.append(origin)
         event.preferred_origin_id = origin.resource_id
@@ -448,6 +464,12 @@ def summarize_single_events(single_events_file, sum_outfile):
                 header = {}
                 phases = []
                 eid = get_eid(line)
+            elif "ERROR" in line:
+                header.update({"eid": eid})                
+                info = {"eid": eid}
+                phases.append(info)      
+                phases.append(header)
+                events_df.extend(phases)    
             elif "DATE  ORIGIN" in line:
                 line = next(f)
                 header = add_origin(line, header)
@@ -516,6 +538,7 @@ def reselect_best(config, stage_n):
     # outputs
     cat_rel_outfile = rootpath / "relocated.out"
     cat_sum_outfile = rootpath / "relocated.csv"
+    
     select_cat_outfile = rootpath / "select.dat"
     select_cnv_outfile = rootpath / "select.cnv"
     select_csv_outfile = rootpath / "select.csv"
