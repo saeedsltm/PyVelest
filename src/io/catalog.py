@@ -28,6 +28,7 @@ from math import sqrt
 from numpy import nan, random
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
 
@@ -97,8 +98,8 @@ def summarize_catalog(config):
     # processing
     cat = read_events(cat_inpfile)
     data = []
-    for e, event in enumerate(cat):
-        eid = e
+    for eid, event in enumerate(cat, 1):
+        eid = eid
         po = event.preferred_origin() or event.origins[0]
         pm = event.preferred_magnitude() or None
         ort = po.time
@@ -142,6 +143,7 @@ def select(
 
     # process
     df = read_csv(catalog_sum_file)
+    df.dropna(subset=["ort"], inplace=True)
     mask = df["lat"].between(
         config.STUDY_AREA.min_lat, config.STUDY_AREA.max_lat
     ) & df["lon"].between(config.STUDY_AREA.min_lon, config.STUDY_AREA.max_lon)
@@ -163,10 +165,10 @@ def select(
 
     filtered = df[mask].copy()
     selected = select_events_3d(filtered, config)
-    selected.to_csv(select_csv_outfile, index=False)
+    selected.to_csv(select_csv_outfile, index=False, float_format="%.3f")
     cat_sel = Catalog()
     for eid in selected.eid:
-        event = catalog[int(eid) - 1]
+        event = catalog[int(eid)-1]
         cat_sel.events.append(event)
     cat_sel.write(
         select_cat_outfile,
@@ -182,7 +184,11 @@ def make_origin(origin_data):
         time=origin_data["time"],
         latitude=origin_data["latitude"],
         longitude=origin_data["longitude"],
-        depth=(origin_data["depth_km"] * 1000.0 if origin_data["depth_km"] else None),
+        depth=(
+            origin_data["depth_km"] * 1000.0
+            if origin_data["depth_km"]
+            else None
+        ),
     )
     return origin
 
@@ -202,15 +208,15 @@ def make_catalog(events_df):
 
         event_info = event_df.iloc[-1]
         event = Event()
-       
+
         if not event_info.ort:
             origin_data = {
-                "time": utc(1900,1,1),
+                "time": utc(1900, 1, 1),
                 "latitude": 0,
                 "longitude": 0,
                 "depth_km": 0,
                 "magnitude": 0,
-                }
+            }
         else:
             origin_data = {
                 "time": utc(event_info.ort),
@@ -218,8 +224,8 @@ def make_catalog(events_df):
                 "longitude": event_info.lon,
                 "depth_km": event_info.dep,
                 "magnitude": event_info.mag,
-                }            
-        
+            }
+
         origin = make_origin(origin_data)
         event.origins.append(origin)
         event.preferred_origin_id = origin.resource_id
@@ -386,7 +392,11 @@ def catalog_to_cnv(
 
     unused_st = sorted(set(unused_st))
     unused_st_df = DataFrame({"code": unused_st})
-    unused_st_df.to_csv(unused_st_file, index=False)
+    with open(unused_st_file, "w") as f:
+        f.write(
+            "# Stations in the catalog but outside the specified region are listed below:\n"
+        )
+        unused_st_df.to_csv(f, index=False)
 
 
 def get_eid(line):
@@ -465,11 +475,11 @@ def summarize_single_events(single_events_file, sum_outfile):
                 phases = []
                 eid = get_eid(line)
             elif "ERROR" in line:
-                header.update({"eid": eid})                
+                header.update({"eid": eid})
                 info = {"eid": eid}
-                phases.append(info)      
+                phases.append(info)
                 phases.append(header)
-                events_df.extend(phases)    
+                events_df.extend(phases)
             elif "DATE  ORIGIN" in line:
                 line = next(f)
                 header = add_origin(line, header)
@@ -508,7 +518,9 @@ def cnv2csv(cnv_inpfile, csv_outfile):
     with open(cnv_inpfile) as fo:
         for line in fo:
             if len(line) > 35 and line[25] in "SN" and line[35] in "EW":
-                ort = dt.strptime(line[:17], "%y%m%d %H%M %S.%f")
+                ort = line[:17]
+                ort = ort[:-5]+"59.99" if ort[-5] == "6" else ort
+                ort = dt.strptime(ort, "%y%m%d %H%M %S.%f")
                 lat = float(line[18:25])
                 lon = float(line[27:35])
                 dep = float(line[37:43])
@@ -538,7 +550,7 @@ def reselect_best(config, stage_n):
     # outputs
     cat_rel_outfile = rootpath / "relocated.out"
     cat_sum_outfile = rootpath / "relocated.csv"
-    
+
     select_cat_outfile = rootpath / "select.dat"
     select_cnv_outfile = rootpath / "select.cnv"
     select_csv_outfile = rootpath / "select.csv"

@@ -247,10 +247,10 @@ def prepare_cmn(config, stage_n, run_n=None):
         run_dir = root / f"run_{run_n:02d}"
 
         # process
+        events_df = read_csv(events_input)
         for n_model in range(1, config.SYNTHETIC_MODELS.n_models + 1):
             model_dir = run_dir / f"model_{n_model:02d}"
             cmnout = model_dir / "velest.cmn"
-            events_df = read_csv(events_input)
             with open(cmn_input) as f:
                 data = yaml.safe_load(f)
             VelestConfig = VELEST_CONFIG.model_validate(data)

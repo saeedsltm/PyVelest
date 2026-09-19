@@ -6,11 +6,13 @@ from numpy import array, asarray, arange, linspace
 from pandas import read_csv, concat
 from obspy.geodetics.base import degrees2kilometers as d2k
 
-rcParams.update({
-    "font.family": "STIXGeneral",
-    "mathtext.fontset": "stix",
-    "font.size": 9,
-})
+rcParams.update(
+    {
+        "font.family": "STIXGeneral",
+        "mathtext.fontset": "stix",
+        "font.size": 9,
+    }
+)
 
 
 def plot_events(config):
@@ -19,9 +21,14 @@ def plot_events(config):
 
     catalog_ini_file = Path("inputs") / "catalog.csv"
     catalog_sel_file = Path("outputs/stage_01") / "select.csv"
+    stations_sel_file = Path("outputs/stage_01") / "stations_sel.csv"
 
     cat_ini = read_csv(catalog_ini_file)
     cat_sel = read_csv(catalog_sel_file)
+    stations_sel = read_csv(stations_sel_file)
+
+    cat_ini.dropna(subset=["ort"], inplace=True)
+    cat_sel.dropna(subset=["ort"], inplace=True)
 
     min_depth = config.FIGURE_SETTINGS.min_sei_depth
     max_depth = config.FIGURE_SETTINGS.max_sei_depth
@@ -67,12 +74,12 @@ def plot_events(config):
             tickminor=True,
         )
 
-        ax.grid(
-            which="major",
-            alpha=0.2,
-            linewidth=0.3,
-            linestyle=":",
-        )
+    axes.grid(
+        which="major",
+        alpha=0.2,
+        linewidth=0.3,
+        linestyle=":",
+    )
 
     # ---------------------------------------------------------
     # Seismicity
@@ -90,6 +97,18 @@ def plot_events(config):
         label="Initial",
         vmin=min_depth,
         vmax=max_depth,
+        cmap="Spectral_r"
+    )
+    ax.scatter(
+        stations_sel.lon.values,
+        stations_sel.lat.values,
+        s=15,
+        c="w",
+        m="^",
+        lw=1.0,
+        ec="k",
+        label="Stations",
+        joinstyle="miter",
     )
 
     ax.format(ultitle=f"N={cat_ini.shape[0]}")
@@ -106,6 +125,18 @@ def plot_events(config):
         label="Initial",
         vmin=min_depth,
         vmax=max_depth,
+        cmap="Spectral_r"
+    )
+    ax.scatter(
+        stations_sel.lon.values,
+        stations_sel.lat.values,
+        s=15,
+        c="w",
+        m="^",
+        lw=1.0,
+        ec="k",
+        label="Stations",
+        joinstyle="miter",
     )
 
     ax.format(ultitle=f"N={cat_sel.shape[0]}")
@@ -699,9 +730,9 @@ def plot_dislocations(config, stage_n, run_n):
     cat_fin = read_csv(catalog_fin_file)
 
     delta = [
-        config.STAGE_04.dx_km*1.5,
-        config.STAGE_04.dy_km*1.5,
-        config.STAGE_04.dz_km*1.5,
+        config.STAGE_04.dx_km * 1.5,
+        config.STAGE_04.dy_km * 1.5,
+        config.STAGE_04.dz_km * 1.5,
     ]
 
     # ------------------------------------------------------------------
@@ -755,7 +786,11 @@ def plot_dislocations(config, stage_n, run_n):
 
         ax.scatter(
             x,
-            d2k(dis_prt[component].values) if j < 2 else dis_prt[component].values,
+            (
+                d2k(dis_prt[component].values)
+                if j < 2
+                else dis_prt[component].values
+            ),
             s=cat_ini.mag.values * 0.01,
             c="#E07A3F",
             lw=0.1,
@@ -764,7 +799,11 @@ def plot_dislocations(config, stage_n, run_n):
         )
         ax.scatter(
             x,
-            d2k(dis_fin[component].values) if j < 2 else dis_fin[component].values,
+            (
+                d2k(dis_fin[component].values)
+                if j < 2
+                else dis_fin[component].values
+            ),
             s=cat_ini.mag.values * 0.01,
             c="#4C78A8",
             lw=0.1,
@@ -801,7 +840,7 @@ def plot_dislocations(config, stage_n, run_n):
             alpha=0.7,
             edgecolor="k",
             color="#E07A3F",
-            label="Initial → Perturbed" if j ==0 else None,
+            label="Initial → Perturbed" if j == 0 else None,
         )
         data = (
             d2k(dis_fin[component].dropna())
@@ -819,7 +858,7 @@ def plot_dislocations(config, stage_n, run_n):
             alpha=0.7,
             edgecolor="k",
             color="#4C78A8",
-            label="Initial → Final" if j ==0 else None,
+            label="Initial → Final" if j == 0 else None,
         )
 
         ax.text(

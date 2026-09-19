@@ -561,12 +561,9 @@ def prepare_station(config, stage_n, run_n=None):
 
         # outputs
         root_dir = Path("outputs/stage_01")
-        # run_dir = root_dir / f"run_{run_n:02d}"
         station_csv_outfile = root_dir / "stations_sel.csv"
 
         # Read / Implement / Write
-        # for n_model in range(1, config.SYNTHETIC_MODELS.n_models + 1):
-        #     model_dir = run_dir / f"model_{n_model:02d}"
         station_out = root_dir / "stations.sta"
         wrire_station(config, station_input, station_out, station_csv_outfile)
 

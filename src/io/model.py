@@ -303,9 +303,9 @@ def simplify_model(
 
                 merge = dvp <= velocity_threshold
 
-            # -----------------------------------------------------
+            # -------------------------------------------------
             # Merge current layer into deeper layer
-            # -----------------------------------------------------
+            # -------------------------------------------------
 
             if merge:
 
@@ -330,10 +330,13 @@ def simplify_model(
                     ] = (current["vs"] + deeper["vs"]) / 2.0
 
                 # -------------------------------------------------
-                # Keep deeper layer depth
+                # Keep the TOP depth of the first layer
                 # -------------------------------------------------
 
-                # deeper["depth"] is retained.
+                layers.at[
+                    layers.index[i + 1],
+                    "depth",
+                ] = current["depth"]
 
                 # -------------------------------------------------
                 # Remove current layer
@@ -345,8 +348,7 @@ def simplify_model(
 
                 changed = True
 
-                # -------------------------------------------------
-                # Do NOT increment i.
+                # Do NOT increment i
                 #
                 # The newly merged layer must be tested against
                 # the next deeper layer.
@@ -444,27 +446,50 @@ def write_vmodel(vmodel: VMODEL, vmodelout: str | Path):
                     )
 
 
-def simplified2vmodel(simplified_modelfile, final_modelfile):
+def simplified2vmodel(config, simplified_modelfile, final_modelfile):
+    first_layer_dmp = config.SYNTHETIC_MODELS.first_layer_dmp
+    last_layer_dmp = config.SYNTHETIC_MODELS.last_layer_dmp
     vmodel = VMODEL.model_construct()
     model_df = read_csv(simplified_modelfile)
     for r, row in model_df.iterrows():
         if row.model == 1:
             vmodel.model_name = "Simplified"
-            vmodel.n_layers = int(row.layer.max())
+            vmodel.n_layers = (
+                int(model_df.shape[0] / 2)
+                if 2 in model_df.model.values
+                else model_df.shape[0]
+            )
             layer = LAYER.model_validate(
                 {
                     "vel": row.velocity,
                     "depth": row.depth,
-                    "vdamp": 50.0 if r == 0 else 1.0,
+                    "vdamp": (
+                        first_layer_dmp
+                        if r == 0
+                        else (
+                            last_layer_dmp
+                            if r == (vmodel.n_layers - 1)
+                            else 1.0
+                        )
+                    ),
                 }
             )
             vmodel.layers_vp.append(layer)
         elif row.model == 2:
+            vmodel.n_layers /= 2
             layer = LAYER.model_validate(
                 {
                     "vel": row.velocity,
                     "depth": row.depth,
-                    "vdamp": 50.0 if r == vmodel.n_layers else 1.0,
+                    "vdamp": (
+                        first_layer_dmp
+                        if r == vmodel.n_layers
+                        else (
+                            last_layer_dmp
+                            if r == (vmodel.n_layers - 1) * 2
+                            else 1.0
+                        )
+                    ),
                 }
             )
             vmodel.layers_vs.append(layer)
@@ -574,7 +599,7 @@ def prepare_model(config, stage_n, run_n=None):
 
         # Read / Implement / Write
         copy(model_input, run_dir)
-        
+
 
 def finalized_inverted_models(config, stage_n, run_n):
 
@@ -601,4 +626,4 @@ def finalized_inverted_models(config, stage_n, run_n):
     simplify_model(
         omodels, averaged_modelfile, simplified_modelfile, merge_thr
     )
-    simplified2vmodel(simplified_modelfile, final_modelfile)
+    simplified2vmodel(config, simplified_modelfile, final_modelfile)

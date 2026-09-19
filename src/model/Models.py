@@ -74,7 +74,8 @@ class SYNTHETIC_MODELS_(BaseModel):
     seed: int = Field(default=1, ge=0.0)
     layer_count: int = Field(default=12, ge=2)
     merging_threshold_km_s: float = Field(default=0.2, ge=0.0)
-
+    first_layer_dmp: int = Field(default=50, ge=0)
+    last_layer_dmp: int = Field(default=10, ge=0)
 
 class STAGE_01_(BaseModel):
     """Settings for stage_01"""
